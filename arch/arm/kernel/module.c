@@ -354,3 +354,4 @@ module_arch_cleanup(struct module *mod)
 			unwind_table_del(mod->arch.unwind[i]);
 #endif
 }
+

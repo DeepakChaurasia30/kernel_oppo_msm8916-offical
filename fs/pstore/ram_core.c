@@ -72,6 +72,7 @@ static inline void buffer_size_add(struct persistent_ram_zone *prz, size_t a)
 	size_t old;
 	size_t new;
 
+
 	if (atomic_read(&prz->buffer->size) == prz->buffer_size)
 		return;
 

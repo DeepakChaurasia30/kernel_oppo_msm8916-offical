@@ -4217,7 +4217,6 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 
 	sdhci_update_power_policy(host, SDHCI_POWER_SAVE_MODE);
 	sdhci_disable_card_detection(host);
-
 	if (host->host_qos[SDHCI_QOS_READ_WRITE].cpu_dma_latency_us) {
 		if (host->host_use_default_qos)
 			pm_qos_remove_request(&(host->host_qos[SDHCI_QOS_READ_WRITE].pm_qos_req_dma));
@@ -4304,3 +4303,4 @@ MODULE_LICENSE("GPL");
 
 MODULE_PARM_DESC(debug_quirks, "Force certain quirks.");
 MODULE_PARM_DESC(debug_quirks2, "Force certain other quirks.");
+

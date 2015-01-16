@@ -1590,6 +1590,7 @@ void net_disable_timestamp(void)
 	}
 #endif
 	static_key_slow_dec(&netstamp_needed);
+
 }
 EXPORT_SYMBOL(net_disable_timestamp);
 
@@ -2461,9 +2462,9 @@ static netdev_features_t harmonize_features(struct sk_buff *skb,
 	if (skb->ip_summed != CHECKSUM_NONE &&
 	    !can_checksum_protocol(features, protocol)) {
 		features &= ~NETIF_F_ALL_CSUM;
-	} else if (illegal_highdma(dev, skb)) {
-		features &= ~NETIF_F_SG;
 	}
+	if (illegal_highdma(dev, skb))
+		features &= ~NETIF_F_SG;
 
 	return features;
 }
@@ -6361,3 +6362,4 @@ out:
 }
 
 subsys_initcall(net_dev_init);
+

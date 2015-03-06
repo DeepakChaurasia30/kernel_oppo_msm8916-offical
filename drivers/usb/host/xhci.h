@@ -1260,6 +1260,9 @@ struct xhci_td {
 	union xhci_trb		*first_trb;
 	union xhci_trb		*last_trb;
 
+	/* actual_length of the URB has already been set */
+	bool			urb_length_set;
+
 	/* ZLP received in data stage of a control transfer */
 	bool			zlp_data;
 };
@@ -1952,3 +1955,4 @@ int xhci_submit_single_step_set_feature(struct usb_hcd *hcd, struct urb *urb,
 					int is_setup);
 
 #endif /* __LINUX_XHCI_HCD_H */
+

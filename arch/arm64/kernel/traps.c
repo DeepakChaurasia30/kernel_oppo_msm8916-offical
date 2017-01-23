@@ -335,43 +335,20 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 
 die_sig:
 	trace_undef_instr(regs, (void *)pc);
-//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
-#ifdef CONFIG_DEBUG_USER
-//#endif
+
 	if (user_mode(regs) && show_unhandled_signals &&
 		unhandled_signal(current, SIGILL) && printk_ratelimit()) {
 		pr_info("%s[%d]: undefined instruction: pc=%p\n",
 			current->comm, task_pid_nr(current), pc);
 		dump_instr(KERN_INFO, regs);
 	}
-//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
-#endif
-//#endif
+
 	info.si_signo = SIGILL;
 	info.si_errno = 0;
 	info.si_code  = ILL_ILLOPC;
 	info.si_addr  = pc;
 
 	arm64_notify_die("Oops - undefined instruction", regs, &info, 0);
-}
-
-static void cntvct_read_handler(unsigned int esr, struct pt_regs *regs)
-{
-	int rt = (esr & ESR_ELx_SYS64_ISS_RT_MASK) >> ESR_ELx_SYS64_ISS_RT_SHIFT;
-
-	if (rt != 31)
-		regs->regs[rt] = arch_counter_get_cntvct();
-	regs->pc += 4;
-}
-
-asmlinkage void __exception do_sysinstr(unsigned int esr, struct pt_regs *regs)
-{
-	if ((esr & ESR_ELx_SYS64_ISS_SYS_OP_MASK) == ESR_ELx_SYS64_ISS_SYS_CNTVCT) {
-		cntvct_read_handler(esr, regs);
-		return;
-	}
-
-	do_undefinstr(regs);
 }
 
 long compat_arm_syscall(struct pt_regs *regs);
@@ -391,30 +368,41 @@ asmlinkage long do_ni_syscall(struct pt_regs *regs)
 		pr_info("%s[%d]: syscall %d\n", current->comm,
 			task_pid_nr(current), (int)regs->syscallno);
 		dump_instr("", regs);
-	//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
-	#ifdef CONFIG_DEBUG_USER
-	//#endif
 		if (user_mode(regs))
 			__show_regs(regs);
-	//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
-	#endif
-	//#endif
 	}
 
 	return sys_ni_syscall();
 }
 
 /*
- * bad_mode handles the impossible case in the exception vector.
+ * bad_mode handles the impossible case in the exception vector. This is always
+ * fatal.
  */
 asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
+{
+	console_verbose();
+
+	pr_crit("Bad mode in %s handler detected, code 0x%08x\n",
+		handler[reason], esr);
+
+	die("Oops - bad mode", regs, 0);
+	local_irq_disable();
+	panic("bad mode");
+}
+
+/*
+ * bad_el0_sync handles unexpected, but potentially recoverable synchronous
+ * exceptions taken from EL0. Unlike bad_mode, this returns.
+ */
+asmlinkage void bad_el0_sync(struct pt_regs *regs, int reason, unsigned int esr)
 {
 	siginfo_t info;
 	void __user *pc = (void __user *)instruction_pointer(regs);
 	console_verbose();
 
-	pr_crit("Bad mode in %s handler detected, code 0x%08x\n",
-		handler[reason], esr);
+	pr_crit("Bad EL0 synchronous exception detected on CPU%d, code 0x%08x\n",
+		smp_processor_id(), esr);
 	__show_regs(regs);
 
 	info.si_signo = SIGILL;
@@ -428,7 +416,7 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
 		arm64_erp_local_dbe_handler();
 	}
 
-	arm64_notify_die("Oops - bad mode", regs, &info, 0);
+	force_sig_info(info.si_signo, &info, current);
 }
 
 void __pte_error(const char *file, int line, unsigned long val)

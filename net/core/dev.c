@@ -1559,38 +1559,59 @@ EXPORT_SYMBOL(call_netdevice_notifiers);
 
 static struct static_key netstamp_needed __read_mostly;
 #ifdef HAVE_JUMP_LABEL
-/* We are not allowed to call static_key_slow_dec() from irq context
- * If net_disable_timestamp() is called from irq context, defer the
- * static_key_slow_dec() calls.
- */
 static atomic_t netstamp_needed_deferred;
+static atomic_t netstamp_wanted;
+static void netstamp_clear(struct work_struct *work)
+{
+	int deferred = atomic_xchg(&netstamp_needed_deferred, 0);
+	int wanted;
+
+	wanted = atomic_add_return(deferred, &netstamp_wanted);
+	if (wanted > 0)
+		static_key_enable(&netstamp_needed);
+	else
+		static_key_disable(&netstamp_needed);
+}
+static DECLARE_WORK(netstamp_work, netstamp_clear);
 #endif
 
 void net_enable_timestamp(void)
 {
 #ifdef HAVE_JUMP_LABEL
-	int deferred = atomic_xchg(&netstamp_needed_deferred, 0);
+	int wanted;
 
-	if (deferred) {
-		while (--deferred)
-			static_key_slow_dec(&netstamp_needed);
-		return;
+	while (1) {
+		wanted = atomic_read(&netstamp_wanted);
+		if (wanted <= 0)
+			break;
+		if (atomic_cmpxchg(&netstamp_wanted, wanted, wanted + 1) == wanted)
+			return;
 	}
-#endif
+	atomic_inc(&netstamp_needed_deferred);
+	schedule_work(&netstamp_work);
+#else
 	static_key_slow_inc(&netstamp_needed);
+#endif
 }
 EXPORT_SYMBOL(net_enable_timestamp);
 
 void net_disable_timestamp(void)
 {
 #ifdef HAVE_JUMP_LABEL
-	if (in_interrupt()) {
-		atomic_inc(&netstamp_needed_deferred);
-		return;
-	}
-#endif
-	static_key_slow_dec(&netstamp_needed);
+	int wanted;
 
+	while (1) {
+		wanted = atomic_read(&netstamp_wanted);
+		if (wanted <= 1)
+			break;
+		if (atomic_cmpxchg(&netstamp_wanted, wanted, wanted - 1) == wanted)
+			return;
+	}
+	atomic_dec(&netstamp_needed_deferred);
+	schedule_work(&netstamp_work);
+#else
+	static_key_slow_dec(&netstamp_needed);
+#endif
 }
 EXPORT_SYMBOL(net_disable_timestamp);
 
@@ -2321,9 +2342,10 @@ EXPORT_SYMBOL(skb_mac_gso_segment);
 static inline bool skb_needs_check(struct sk_buff *skb, bool tx_path)
 {
 	if (tx_path)
-		return skb->ip_summed != CHECKSUM_PARTIAL;
-	else
-		return skb->ip_summed == CHECKSUM_NONE;
+		return skb->ip_summed != CHECKSUM_PARTIAL &&
+		       skb->ip_summed != CHECKSUM_NONE;
+
+	return skb->ip_summed == CHECKSUM_NONE;
 }
 
 /**
@@ -2340,11 +2362,12 @@ static inline bool skb_needs_check(struct sk_buff *skb, bool tx_path)
 struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 				  netdev_features_t features, bool tx_path)
 {
+	struct sk_buff *segs;
+
 	if (unlikely(skb_needs_check(skb, tx_path))) {
 		int err;
 
-		skb_warn_bad_offload(skb);
-
+		/* We're going to init ->check field in TCP or UDP header */
 		if (skb_header_cloned(skb) &&
 		    (err = pskb_expand_head(skb, 0, 0, GFP_ATOMIC)))
 			return ERR_PTR(err);
@@ -2354,7 +2377,12 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	skb_reset_mac_header(skb);
 	skb_reset_mac_len(skb);
 
-	return skb_mac_gso_segment(skb, features);
+	segs = skb_mac_gso_segment(skb, features);
+
+	if (unlikely(skb_needs_check(skb, tx_path)))
+		skb_warn_bad_offload(skb);
+
+	return segs;
 }
 EXPORT_SYMBOL(__skb_gso_segment);
 
@@ -5615,7 +5643,7 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 	} else {
 		netdev_stats_to_stats64(storage, &dev->stats);
 	}
-	storage->rx_dropped += atomic_long_read(&dev->rx_dropped);
+	storage->rx_dropped += (unsigned long)atomic_long_read(&dev->rx_dropped);
 	return storage;
 }
 EXPORT_SYMBOL(dev_get_stats);
@@ -6039,8 +6067,8 @@ static int dev_cpu_callback(struct notifier_block *nfb,
 	 */
 	while (!list_empty(&oldsd->poll_list)) {
 		struct napi_struct *napi = list_first_entry(&oldsd->poll_list,
-							struct napi_struct,
-							poll_list);
+							    struct napi_struct,
+							    poll_list);
 
 		list_del_init(&napi->poll_list);
 		if (napi->poll == process_backlog)
@@ -6054,11 +6082,11 @@ static int dev_cpu_callback(struct notifier_block *nfb,
 
 	/* Process offline CPU's input_pkt_queue */
 	while ((skb = __skb_dequeue(&oldsd->process_queue))) {
-		netif_rx(skb);
+		kfree_skb(skb);
 		input_queue_head_incr(oldsd);
 	}
 	while ((skb = skb_dequeue(&oldsd->input_pkt_queue))) {
-		netif_rx(skb);
+		kfree_skb(skb);
 		input_queue_head_incr(oldsd);
 	}
 

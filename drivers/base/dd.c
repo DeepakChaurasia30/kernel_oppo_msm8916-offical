@@ -345,16 +345,32 @@ probe_failed:
 
 	if (ret == -EPROBE_DEFER) {
 		/* Driver requested deferred probing */
+		#ifndef VENDOR_EDIT
+		//Yadong.Hu@Prd.Svc.Wifi, 2015/09/23, Modify for optimize log to enhance speed of wlan FTM mode
+		/*
 		dev_info(dev, "Driver %s requests probe deferral\n", drv->name);
+		*/
+		#else /* VENDOR_EDIT */
+		dev_dbg(dev, "Driver %s requests probe deferral\n", drv->name);    
+		#endif /* VENDOR_EDIT */
 		driver_deferred_probe_add(dev);
 		/* Did a trigger occur while probing? Need to re-trigger if yes */
 		if (local_trigger_count != atomic_read(&deferred_trigger_count))
 			driver_deferred_probe_trigger();
 	} else if (ret != -ENODEV && ret != -ENXIO) {
 		/* driver matched but the probe failed */
+		#ifndef VENDOR_EDIT
+		//Yadong.Hu@Prd.Svc.Wifi, 2015/09/23, Modify for optimize log to enhance speed of wlan FTM mode
+		/*
 		printk(KERN_WARNING
 		       "%s: probe of %s failed with error %d\n",
-		       drv->name, dev_name(dev), ret);
+		       drv->name, dev_name(dev), ret);		
+		*/
+		#else /* VENDOR_EDIT */
+		printk(KERN_DEBUG
+		       "%s: probe of %s failed with error %d\n",
+		       drv->name, dev_name(dev), ret);		    
+		#endif /* VENDOR_EDIT */
 	} else {
 		pr_debug("%s: probe of %s rejects match %d\n",
 		       drv->name, dev_name(dev), ret);

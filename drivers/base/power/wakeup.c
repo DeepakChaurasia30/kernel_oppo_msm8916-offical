@@ -24,6 +24,17 @@
  */
 bool events_check_enabled __read_mostly;
 
+#ifdef VENDOR_EDIT
+/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+#define MODEM_WAKEUP_SRC_NUM 3
+int modem_wakeup_src_count[MODEM_WAKEUP_SRC_NUM] = { 0 };
+char modem_wakeup_src_string[MODEM_WAKEUP_SRC_NUM][20] =
+		{"DIAG_WS",
+		"SMSM-MODEM-IRQ",
+		"QMI_WS"};
+struct work_struct wakeup_reason_work;
+#endif /* VENDOR_EDIT */
+
 /*
  * Combined counters of registered wakeup events and wakeup events in progress.
  * They need to be modified together atomically, so it's better to use one
@@ -82,6 +93,11 @@ struct wakeup_source *wakeup_source_create(const char *name)
 	if (!ws)
 		return NULL;
 
+#ifdef VENDOR_EDIT
+//Modify by Tong.han@Bsp.Group.Tp for checklist ,2015-4-18
+	ws->inserted = 0;
+#endif/*VENDOR_EDIT*/
+
 	wakeup_source_prepare(ws, name ? kstrdup(name, GFP_KERNEL) : NULL);
 	return ws;
 }
@@ -138,7 +154,17 @@ void wakeup_source_add(struct wakeup_source *ws)
 	ws->last_time = ktime_get();
 
 	spin_lock_irqsave(&events_lock, flags);
-	list_add_rcu(&ws->entry, &wakeup_sources);
+	
+#ifdef VENDOR_EDIT
+//Modify by Tong.han@Bsp.Group.Tp for checklist ,2015-4-18
+	spin_lock(&ws->lock);
+	if (!ws->inserted) {
+		list_add_rcu(&ws->entry, &wakeup_sources);
+		ws->inserted = 1;
+	}
+	spin_unlock(&ws->lock);
+#endif/*VENDOR_EDIT*/
+
 	spin_unlock_irqrestore(&events_lock, flags);
 }
 EXPORT_SYMBOL_GPL(wakeup_source_add);
@@ -154,8 +180,16 @@ void wakeup_source_remove(struct wakeup_source *ws)
 	if (WARN_ON(!ws))
 		return;
 
-	spin_lock_irqsave(&events_lock, flags);
-	list_del_rcu(&ws->entry);
+	spin_lock_irqsave(&events_lock, flags);	
+#ifdef VENDOR_EDIT
+//Modify by Tong.han@Bsp.Group.Tp for checklist ,2015-4-18
+	spin_lock(&ws->lock);
+	if (ws->inserted) {
+		list_del_rcu(&ws->entry);
+		ws->inserted = 0;
+	}
+	spin_unlock(&ws->lock);
+#endif/*VENDOR_EDIT*/
 	spin_unlock_irqrestore(&events_lock, flags);
 	synchronize_rcu();
 }
@@ -393,7 +427,6 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	ws->last_time = ktime_get();
 	if (ws->autosleep_enabled)
 		ws->start_prevent_time = ws->last_time;
-
 	/* Increment the counter of events in progress. */
 	cec = atomic_inc_return(&combined_event_count);
 
@@ -659,6 +692,60 @@ void pm_wakeup_event(struct device *dev, unsigned int msec)
 }
 EXPORT_SYMBOL_GPL(pm_wakeup_event);
 
+#ifdef VENDOR_EDIT
+/* OPPO 2015-03-26 sjc Add begin for sleep debug */
+void print_active_wakeup_sources(void)
+{
+	struct wakeup_source *ws;
+	int active = 0;
+	struct wakeup_source *last_activity_ws = NULL;
+	#ifdef VENDOR_EDIT
+	/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+	int i = 0;
+	#endif /* VENDOR_EDIT */
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
+
+		if (ws->active) {
+			pr_info("active wakeup source: %s\n", ws->name);
+			active = 1;
+            #ifdef VENDOR_EDIT
+            /*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+            for(i = 0; i < MODEM_WAKEUP_SRC_NUM - 1; i++) {
+                if (strcmp(modem_wakeup_src_string[i], ws->name) == 0) {
+                    modem_wakeup_src_count[i]++;
+                }
+            }
+            #endif /* VENDOR_EDIT */
+		} else if (!active &&
+			   (!last_activity_ws ||
+			    ktime_to_ns(ws->last_time) >
+			    ktime_to_ns(last_activity_ws->last_time))) {
+			last_activity_ws = ws;
+		}
+	}
+
+	if (!active && last_activity_ws)
+	#ifdef VENDOR_EDIT
+	{
+		pr_info("last active wakeup source: %s\n",
+			last_activity_ws->name);       
+        /*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+        for(i = 0; i < MODEM_WAKEUP_SRC_NUM - 1; i++) {
+            if (strcmp(modem_wakeup_src_string[i], last_activity_ws->name) == 0) {
+                modem_wakeup_src_count[i]++;
+            }
+        }
+	}
+	#else /* VENDOR_EDIT */
+		pr_info("last active wakeup source: %s\n",
+			last_activity_ws->name);
+    #endif /* VENDOR_EDIT */
+	rcu_read_unlock();
+}
+EXPORT_SYMBOL_GPL(print_active_wakeup_sources);
+#else /* VENDOR_EDIT */
 static void print_active_wakeup_sources(void)
 {
 	struct wakeup_source *ws;
@@ -666,6 +753,7 @@ static void print_active_wakeup_sources(void)
 	struct wakeup_source *last_activity_ws = NULL;
 
 	rcu_read_lock();
+	printk("%s: %d\n", __func__, __LINE__);
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		if (ws->active) {
 			pr_info("active wakeup source: %s\n", ws->name);
@@ -681,8 +769,10 @@ static void print_active_wakeup_sources(void)
 	if (!active && last_activity_ws)
 		pr_info("last active wakeup source: %s\n",
 			last_activity_ws->name);
+	printk("%s: %d\n", __func__, __LINE__);
 	rcu_read_unlock();
 }
+#endif /* VENDOR_EDIT */
 
 /**
  * pm_wakeup_pending - Check if power transition in progress should be aborted.
@@ -786,6 +876,7 @@ void pm_wakep_autosleep_enabled(bool set)
 	ktime_t now = ktime_get();
 
 	rcu_read_lock();
+	printk("%s: %d\n", __func__, __LINE__);
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		spin_lock_irq(&ws->lock);
 		if (ws->autosleep_enabled != set) {
@@ -799,6 +890,7 @@ void pm_wakep_autosleep_enabled(bool set)
 		}
 		spin_unlock_irq(&ws->lock);
 	}
+	printk("%s: %d\n", __func__, __LINE__);
 	rcu_read_unlock();
 }
 #endif /* CONFIG_PM_AUTOSLEEP */
@@ -868,8 +960,10 @@ static int wakeup_sources_stats_show(struct seq_file *m, void *unused)
 		"last_change\tprevent_suspend_time\n");
 
 	rcu_read_lock();
+	printk("%s: %d\n", __func__, __LINE__);
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry)
 		print_wakeup_source_stats(m, ws);
+	printk("%s: %d\n", __func__, __LINE__);
 	rcu_read_unlock();
 
 	return 0;

@@ -227,7 +227,14 @@ static int csr_probe(struct platform_device *pdev)
 	if (IS_ERR(drvdata->csdev))
 		return PTR_ERR(drvdata->csdev);
 
-	dev_info(dev, "CSR initialized\n");
+#ifndef VENDOR_EDIT
+//Yadong.Hu@Prd.Svc.Wifi, 2015/09/24, Modify for optimize log to enhance speed of wlan FTM mode
+/*
+    dev_info(dev, "CSR initialized\n");
+*/
+#else /* VENDOR_EDIT */
+    dev_dbg(dev, "CSR initialized\n");    
+#endif /* VENDOR_EDIT */
 	return 0;
 }
 

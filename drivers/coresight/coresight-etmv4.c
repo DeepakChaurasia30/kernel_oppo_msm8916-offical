@@ -3258,7 +3258,15 @@ static int etm_late_init(struct etm_drvdata *drvdata)
 		goto err1;
 	}
 
+#ifndef VENDOR_EDIT
+//Yadong.Hu@Prd.Svc.Wifi, 2015/09/24, Modify for optimize log to enhance speed of wlan FTM mode
+/*
 	dev_info(dev, "ETMv4 initialized\n");
+*/
+#else /* VENDOR_EDIT */
+	dev_dbg(dev, "ETMv4 initialized\n");    
+#endif /* VENDOR_EDIT */
+
 
 	if (boot_reset)
 		etm_reset_data(drvdata);

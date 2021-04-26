@@ -503,12 +503,20 @@ static void __sysrq_put_key_op(int key, struct sysrq_key_op *op_p)
                 sysrq_key_table[i] = op_p;
 }
 
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add some log for debug
+extern int qpnp_pon_print_power_reason(void);
+#endif
+
 void __handle_sysrq(int key, bool check_mask)
 {
 	struct sysrq_key_op *op_p;
 	int orig_log_level;
 	int i;
 	unsigned long flags;
+
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add some log for debug
+	qpnp_pon_print_power_reason();
+#endif
 
 	spin_lock_irqsave(&sysrq_key_table_lock, flags);
 	/*

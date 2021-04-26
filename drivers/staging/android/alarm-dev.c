@@ -38,11 +38,20 @@ do {									\
 		pr_info(fmt, ##__VA_ARGS__);				\
 } while (0)
 
+/* OPPO 2014-07-31 wenxian.zhen modify begin for power up alarm */
+#ifndef VENDOR_EDIT
 #define ANDROID_ALARM_WAKEUP_MASK ( \
 	ANDROID_ALARM_RTC_WAKEUP_MASK | \
 	ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK | \
 	ANDROID_ALARM_RTC_POWEROFF_WAKEUP_MASK)
-
+#else
+#define ANDROID_ALARM_WAKEUP_MASK ( \
+	ANDROID_ALARM_RTC_WAKEUP_MASK | \
+	ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK | \
+	ANDROID_ALARM_RTC_POWEROFF_WAKEUP_MASK | \
+	ANDROID_ALARM_RTC_POWERUP_MASK)
+#endif
+/* OPPO 2014-07-31 wenxian.zhen modify end for power up alarm */
 static int alarm_opened;
 static DEFINE_SPINLOCK(alarm_slock);
 static DEFINE_MUTEX(alarm_mutex);
@@ -67,7 +76,15 @@ static int is_wakeup(enum android_alarm_type type)
 {
 	return (type == ANDROID_ALARM_RTC_WAKEUP ||
 		type == ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP ||
+
+#ifndef VENDOR_EDIT
+	/* wenxian.zhen@Onlinerd.Driver, 2014/07/31  Modify for power off alarm */	
 		type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP);
+#else
+		type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP ||
+		type == ANDROID_ALARM_RTC_POWERUP);
+
+#endif
 }
 
 
@@ -111,8 +128,12 @@ static void alarm_clear(enum android_alarm_type alarm_type, struct timespec *ts)
 	}
 	alarm_enabled &= ~alarm_type_mask;
 	spin_unlock_irqrestore(&alarm_slock, flags);
-
+#ifndef VENDOR_EDIT
+	/* wenxian.zhen@Onlinerd.Driver, 2014/07/31  Modify for power off alarm */
 	if (alarm_type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP)
+#else /*power off alarm*/
+	if ((alarm_type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP)|| (alarm_type == ANDROID_ALARM_RTC_POWERUP))
+#endif /*power off alarm*/
 		set_power_on_alarm(ts->tv_sec, 0);
 	mutex_unlock(&alarm_mutex);
 }
@@ -131,7 +152,12 @@ static void alarm_set(enum android_alarm_type alarm_type,
 	devalarm_start(&alarms[alarm_type], timespec_to_ktime(*ts));
 	spin_unlock_irqrestore(&alarm_slock, flags);
 
+#ifndef VENDOR_EDIT
+/* wenxian.zhen@Onlinerd.Driver, 2014/07/31  Modify for power off alarm */
 	if (alarm_type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP)
+#else /*power off alarm*/
+	if ((alarm_type == ANDROID_ALARM_RTC_POWEROFF_WAKEUP)|| (alarm_type == ANDROID_ALARM_RTC_POWERUP))	
+#endif /*power off alarm*/
 		set_power_on_alarm(ts->tv_sec, 1);
 	mutex_unlock(&alarm_mutex);
 }
@@ -148,10 +174,29 @@ static int alarm_wait(void)
 		wait_pending = 0;
 	}
 	spin_unlock_irqrestore(&alarm_slock, flags);
-
+#ifdef VENDOR_EDIT
+#ifdef CONFIG_AGING_TEST_ALARM_DEBUG
+//Fuchun.Liao@Mobile.BSP.Charge 2015-11-20 add for alarm debug
+	pr_err("%s alarm_pending:0x%x\n", __func__,alarm_pending);
+#endif
+#endif	//VENDOR_EDIT
 	rv = wait_event_interruptible(alarm_wait_queue, alarm_pending);
+
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.Charge 2015-11-20 add for alarm debug
 	if (rv)
 		return rv;
+#else
+#ifndef CONFIG_AGING_TEST_ALARM_DEBUG
+	if(rv)
+		return rv;
+#else
+	if(rv) {
+		pr_err("%s rv:%d\n", __func__,rv);
+		return rv;
+	}
+#endif
+#endif	//VENDOR_EDIT
 
 	spin_lock_irqsave(&alarm_slock, flags);
 	rv = alarm_pending;
@@ -181,7 +226,12 @@ static int alarm_set_rtc(struct timespec *ts)
 	alarm_pending |= ANDROID_ALARM_TIME_CHANGE_MASK;
 	wake_up(&alarm_wait_queue);
 	spin_unlock_irqrestore(&alarm_slock, flags);
-
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.Charge 2015-11-20 add for alarm debug
+#ifdef CONFIG_AGING_TEST_ALARM_DEBUG
+	pr_err("%s alarm_pending:0x%x\n", __func__,alarm_pending);
+#endif
+#endif	//VENDOR_EDIT
 	return rv;
 }
 
@@ -194,6 +244,11 @@ static int alarm_get_time(enum android_alarm_type alarm_type,
 	case ANDROID_ALARM_RTC_WAKEUP:
 	case ANDROID_ALARM_RTC:
 	case ANDROID_ALARM_RTC_POWEROFF_WAKEUP:
+#ifdef VENDOR_EDIT
+		/* wenxian.zhen@Onlinerd.Driver, 2014/07/31  add begin for power off alarm */
+	case ANDROID_ALARM_RTC_POWERUP:
+#endif 
+		/* wenxian.zhen@Onlinerd.Driver, 2014/07/31  add end for power off alarm */
 		getnstimeofday(ts);
 		break;
 	case ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP:
@@ -377,6 +432,12 @@ static void devalarm_triggered(struct devalarm *alarm)
 		alarm_enabled &= ~alarm_type_mask;
 		alarm_pending |= alarm_type_mask;
 		wake_up(&alarm_wait_queue);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.Charge 2015-11-20 add for alarm debug
+#ifdef CONFIG_AGING_TEST_ALARM_DEBUG
+		pr_err("%s alarm_pending:%d\n", __func__,alarm_pending);
+#endif
+#endif	//VENDOR_EDIT
 	}
 	spin_unlock_irqrestore(&alarm_slock, flags);
 }
@@ -437,6 +498,12 @@ static int __init alarm_dev_init(void)
 			CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	alarm_init(&alarms[ANDROID_ALARM_RTC_POWEROFF_WAKEUP].u.alrm,
 			ALARM_REALTIME, devalarm_alarmhandler);
+	/* OPPO 2014-07-31 wenxian.zhen add begin for power up alarm */
+#ifdef VENDOR_EDIT
+	alarm_init(&alarms[ANDROID_ALARM_RTC_POWERUP].u.alrm,
+			ALARM_REALTIME, devalarm_alarmhandler);
+#endif
+	/* OPPO 2014-07-31 wenxian.zhen add end for power up alarm */
 
 	for (i = 0; i < ANDROID_ALARM_TYPE_COUNT; i++) {
 		alarms[i].type = i;

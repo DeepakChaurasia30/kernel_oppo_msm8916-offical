@@ -110,7 +110,29 @@ struct irq_chip gic_arch_extn = {
 #ifndef MAX_GIC_NR
 #define MAX_GIC_NR	1
 #endif
+#ifdef VENDOR_EDIT
+/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+#define WAKEUP_SOURCE_WIFI_TX	177
+#define WAKEUP_SOURCE_WIFI_RX	178
+#define WAKEUP_SOURCE_MODEM_57	57
+#define WAKEUP_SOURCE_MODEM_58	58
+#define WAKEUP_SOURCE_AP_RPM	200
+#define WAKEUP_SOURCE_PMIC_ALARM	203
+#define WAKEUP_SOURCE_RTC_INT_NUM	2
+#define WAKEUP_SOURCE_INT_FIRST	1
+#define WAKEUP_SOURCE_INT_SECOND	2
 
+u64 wakeup_source_count_wifi;
+u64 wakeup_source_count_modem;
+
+#define MODEM_WAKEUP_SRC_NUM 3
+extern int modem_wakeup_src_count[MODEM_WAKEUP_SRC_NUM];
+extern char modem_wakeup_src_string[MODEM_WAKEUP_SRC_NUM][20];
+
+extern u64 wakeup_source_count_rtc;
+u16 modem_wakeup_source = 0;
+extern struct work_struct wakeup_reason_work;
+#endif /* VENDOR_EDIT */
 static struct gic_chip_data gic_data[MAX_GIC_NR] __read_mostly;
 
 #ifdef CONFIG_GIC_NON_BANKED
@@ -273,6 +295,12 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	u32 enabled;
 	u32 pending[32];
 	void __iomem *base = gic_data_dist_base(gic);
+#ifdef VENDOR_EDIT
+/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+	unsigned int int_id_1 = 0;
+	unsigned int int_id_2 = 0;
+	unsigned int int_count = 0;
+#endif /* VENDOR_EDIT */
 
 	if (!msm_show_resume_irq_mask)
 		return;
@@ -298,7 +326,36 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 
 		pr_warning("%s: %d triggered %s\n", __func__,
 					i + gic->irq_offset, name);
+#ifdef VENDOR_EDIT
+/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+		if ((WAKEUP_SOURCE_WIFI_TX == (i + gic->irq_offset)) || (WAKEUP_SOURCE_WIFI_RX == (i + gic->irq_offset)))
+			wakeup_source_count_wifi++;
+
+		if ((WAKEUP_SOURCE_MODEM_57 == (i + gic->irq_offset)) || (WAKEUP_SOURCE_MODEM_58 == (i + gic->irq_offset))) {
+			wakeup_source_count_modem++;
+
+			if(WAKEUP_SOURCE_MODEM_57 == (i + gic->irq_offset)) {
+			    modem_wakeup_src_count[MODEM_WAKEUP_SRC_NUM -1]++;
+			}
+
+			if(WAKEUP_SOURCE_MODEM_58 == (i + gic->irq_offset)) {
+			    modem_wakeup_src_count[MODEM_WAKEUP_SRC_NUM -2]++;
+				modem_wakeup_source = 1;
+				schedule_work(&wakeup_reason_work);
+			}
+		}
+		int_count++;
+		if (int_count == WAKEUP_SOURCE_INT_FIRST)
+			int_id_1 = (i + gic->irq_offset);
+		if (int_count == WAKEUP_SOURCE_INT_SECOND)
+			int_id_2 = (i + gic->irq_offset);
+#endif /* VENDOR_EDIT */
 	}
+#ifdef VENDOR_EDIT
+/*Chaoying.Chen@Prd6.BaseDrv.Power.Basic,2016/11/15 Add for wake up source */
+	if ((WAKEUP_SOURCE_RTC_INT_NUM == int_count) && (WAKEUP_SOURCE_AP_RPM == int_id_1) && (WAKEUP_SOURCE_PMIC_ALARM == int_id_2))
+		wakeup_source_count_rtc++;
+#endif /* VENDOR_EDIT */
 }
 
 static void gic_resume_one(struct gic_chip_data *gic)
@@ -427,6 +484,14 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	raw_spin_lock(&irq_controller_lock);
 	val = readl_relaxed_no_log(reg) & ~mask;
 	writel_relaxed_no_log(val | bit, reg);
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add qcom patch for msm_wfi_die bug 
+	if (gic_irq(d) == 215)
+		if (readl_relaxed_no_log(reg) != (val | bit)) {
+			writel_relaxed_no_log(val | bit, reg);
+			if (readl_relaxed_no_log(reg) != (val | bit))
+				pr_info("IRQ 215 affinity migration failed\n");
+		}
+#endif
 	raw_spin_unlock(&irq_controller_lock);
 
 	return IRQ_SET_MASK_OK;
@@ -1109,6 +1174,11 @@ int __init gic_of_init(struct device_node *node, struct device_node *parent)
 		gic_cascade_irq(gic_cnt, irq);
 	}
 	gic_cnt++;
+#ifdef VENDOR_EDIT
+//Wenxian.Zhen@BSP.Power.Basic, 2016/07/19, add for analysis power consumption
+		wakeup_source_count_wifi = 0;
+		wakeup_source_count_modem = 0;
+#endif /* VENDOR_EDIT */
 	return 0;
 }
 IRQCHIP_DECLARE(cortex_a15_gic, "arm,cortex-a15-gic", gic_of_init);

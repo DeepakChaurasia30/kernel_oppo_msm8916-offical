@@ -26,6 +26,10 @@
 #include <linux/debugfs.h>
 #include <linux/regulator/onsemi-ncp6335d.h>
 #include <linux/string.h>
+#ifdef VENDOR_EDIT
+/*chaoying.chen@EXP.BaseDrv.charge,2016/05/19 add board id gpio status for 15399 */
+#include <soc/oppo/oppo_project.h>
+#endif /*VENDOR_EDIT*/
 
 /* registers */
 #define REG_NCP6335D_PID		0x03
@@ -740,6 +744,10 @@ static struct i2c_driver ncp6335d_regulator_driver = {
  *
  * Returns 0 on success or errno on failure.
  */
+ #ifdef VENDOR_EDIT
+/*chaoying.chen@EXP.BaseDrv.charge,2016/05/19 add board id gpio status for 15399 */
+ extern unsigned int oppo_inside_ldo_status;
+ #endif /*VENDOR_EDIT*/
 int __init ncp6335d_regulator_init(void)
 {
 	static bool initialized;
@@ -748,8 +756,13 @@ int __init ncp6335d_regulator_init(void)
 		return 0;
 	else
 		initialized = true;
-
-	return i2c_add_driver(&ncp6335d_regulator_driver);
+ #ifdef VENDOR_EDIT
+/*chaoying.chen@EXP.BaseDrv.charge,2016/05/19 add board id gpio status for 15399 */
+        if((oppo_inside_ldo_status == 1) && (is_project(OPPO_15399)))
+		return 0;
+	else	
+#endif /*VENDOR_EDIT*/		
+		return i2c_add_driver(&ncp6335d_regulator_driver);
 }
 EXPORT_SYMBOL(ncp6335d_regulator_init);
 arch_initcall(ncp6335d_regulator_init);

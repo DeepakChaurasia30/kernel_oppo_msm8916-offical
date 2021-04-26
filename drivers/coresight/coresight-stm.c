@@ -918,7 +918,15 @@ static int stm_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
+#ifndef VENDOR_EDIT
+//Yadong.Hu@Prd.Svc.Wifi, 2015/09/24, Modify for optimize log to enhance speed of wlan FTM mode
+/*
 	dev_info(drvdata->dev, "STM initialized\n");
+*/
+#else /* VENDOR_EDIT */
+	dev_dbg(drvdata->dev, "STM initialized\n");    
+#endif /* VENDOR_EDIT */
+
 
 	if (boot_enable)
 		coresight_enable(drvdata->csdev);

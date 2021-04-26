@@ -2595,7 +2595,14 @@ static int tmc_probe(struct platform_device *pdev)
 		}
 	}
 
+#ifndef VENDOR_EDIT
+//Yadong.Hu@Prd.Svc.Wifi, 2015/09/24, Modify for optimize log to enhance speed of wlan FTM mode
+/*
 	dev_info(dev, "TMC initialized\n");
+*/
+#else /* VENDOR_EDIT */
+	dev_dbg(dev, "TMC initialized\n");    
+#endif /* VENDOR_EDIT */
 	return 0;
 err3:
 	coresight_unregister(drvdata->csdev);

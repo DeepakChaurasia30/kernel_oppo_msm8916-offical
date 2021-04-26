@@ -155,6 +155,10 @@ struct qpnp_pon {
 	int num_pon_config;
 	u16 base;
 	struct delayed_work bark_work;
+	#ifdef VENDOR_EDIT
+	//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+	struct delayed_work backlight_work;
+	#endif
 	u32 dbc;
 	int pon_trigger_reason;
 	int pon_power_off_reason;
@@ -434,6 +438,37 @@ int qpnp_pon_is_warm_reset(void)
 }
 EXPORT_SYMBOL(qpnp_pon_is_warm_reset);
 
+#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add a function to get poweron reason for debug
+int qpnp_pon_print_power_reason(void)
+{
+	struct qpnp_pon *pon = sys_reset_dev;
+
+	if(!pon)
+		return -1;
+
+	if (pon->pon_trigger_reason >= ARRAY_SIZE(qpnp_pon_reason) || pon->pon_trigger_reason < 0) {
+		pr_err("PMIC@SID%d Power-on reason: Unknown and '%s' boot\n",
+			pon->spmi->sid, cold_boot ? "cold" : "warm");
+	} else {
+		pr_err("PMIC@SID%d Power-on reason: %s and '%s' boot\n",
+			pon->spmi->sid, qpnp_pon_reason[pon->pon_trigger_reason],
+			cold_boot ? "cold" : "warm");
+	}
+
+	if (pon->pon_power_off_reason >= ARRAY_SIZE(qpnp_poff_reason) || pon->pon_power_off_reason < 0) {
+		pr_err("PMIC@SID%d: Unknown power-off reason\n",
+				pon->spmi->sid);
+	} else {
+		pr_err("PMIC@SID%d: Power-off reason: %s\n",
+				pon->spmi->sid,
+				qpnp_poff_reason[pon->pon_power_off_reason]);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_pon_print_power_reason);
+#endif
+
 /**
  * qpnp_pon_wd_config - Disable the wd in a warm reset.
  * @enable: to enable or disable the PON watch dog
@@ -592,6 +627,8 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 
 	pr_debug("PMIC input: code=%d, sts=0x%hhx\n",
 					cfg->key_code, pon_rt_sts);
+
+
 	key_status = pon_rt_sts & pon_rt_bit;
 
 	/* simulate press event in case release event occured
@@ -601,6 +638,19 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		input_report_key(pon->pon_input, cfg->key_code, 1);
 		input_sync(pon->pon_input);
 	}
+
+	#ifdef VENDOR_EDIT
+	/*rongchun.zhang@EXP.BaseDrv 2015-12-18 add for print powerkey log*/
+	if( (cfg->pon_type ==PON_KPDPWR) && key_status){
+		pr_err("PMIC input,PowerKey is pressed!! code=%d, key_status=0x%hhx\n",
+					cfg->key_code, key_status);
+	}else if((cfg->pon_type ==PON_KPDPWR) && (!key_status)){
+		pr_err("PMIC input,PowerKey is released!! code=%d, key_status=0x%hhx\n",
+					cfg->key_code, key_status);
+	}else
+		pr_err("key_code=%d, key_status=0x%hhx\n",
+					cfg->key_code, key_status);
+	#endif
 
 	input_report_key(pon->pon_input, cfg->key_code, key_status);
 	input_sync(pon->pon_input);
@@ -622,8 +672,31 @@ static irqreturn_t qpnp_kpdpwr_irq(int irq, void *_pon)
 	return IRQ_HANDLED;
 }
 
+#ifdef VENDOR_EDIT
+//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+extern int lm3630_bank_a_update_status(u32 bl_level);
+#define QPNP_BACKLIGHT_OFF_DELAY			msecs_to_jiffies(1800)
+#endif
+
 static irqreturn_t qpnp_kpdpwr_bark_irq(int irq, void *_pon)
 {
+#ifdef VENDOR_EDIT
+//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+	struct qpnp_pon *pon = _pon;
+	struct qpnp_pon_config *cfg;
+
+	/* disable the bark interrupt */
+	disable_irq_nosync(irq);
+
+	cfg = qpnp_get_cfg(pon, PON_KPDPWR);
+	if (!cfg) {
+		dev_err(&pon->spmi->dev, "Invalid config pointer\n");
+		return IRQ_HANDLED;
+	}
+
+	pr_err("====================%s delay work to close backlight ===============\n",__func__);
+	schedule_delayed_work(&pon->backlight_work, QPNP_BACKLIGHT_OFF_DELAY);
+#endif
 	return IRQ_HANDLED;
 }
 
@@ -643,6 +716,7 @@ static irqreturn_t qpnp_kpdpwr_resin_bark_irq(int irq, void *_pon)
 	return IRQ_HANDLED;
 }
 
+#ifndef VENDOR_EDIT
 static irqreturn_t qpnp_cblpwr_irq(int irq, void *_pon)
 {
 	int rc;
@@ -654,6 +728,52 @@ static irqreturn_t qpnp_cblpwr_irq(int irq, void *_pon)
 
 	return IRQ_HANDLED;
 }
+#else
+#define CBL_POWER_ON_VALID_REG			0x810
+#define CBL_POWER_ON_VALID_MASK			BIT(2)
+#define CBL_POWER_ON_VALID				BIT(2)
+extern void opchg_usbin_valid_irq_handler(bool usb_present);
+
+static bool qpnp_cblpwr_is_usb_plugged_in(struct qpnp_pon *pon)
+{
+	int rc;
+	u8 valid_sta;
+	
+	rc = spmi_ext_register_readl(pon->spmi->ctrl, pon->spmi->sid,
+				CBL_POWER_ON_VALID_REG, &valid_sta, 1);
+	if (rc) {
+		dev_err(&pon->spmi->dev, "Unable to read PON RT status\n");
+		return rc;
+	}
+	return (valid_sta & CBL_POWER_ON_VALID_MASK) ? 1 : 0;
+}
+
+static irqreturn_t qpnp_cblpwr_irq(int irq, void *_pon)
+{
+	struct qpnp_pon *pon = _pon;
+	bool usb_present = 0;
+
+#if 0
+	rc = qpnp_pon_input_dispatch(pon, PON_CBLPWR);
+	if (rc)
+		dev_err(&pon->spmi->dev, "Unable to send input event\n");
+#endif
+
+	usb_present = qpnp_cblpwr_is_usb_plugged_in(pon);
+	pr_err("%s usbin-valid triggered:%d\n",__func__,usb_present);
+	opchg_usbin_valid_irq_handler(usb_present);
+	return IRQ_HANDLED;
+}
+
+int opchg_get_charger_inout_cblpwr(void)
+{
+	int charger_in=0;
+	
+	charger_in= qpnp_cblpwr_is_usb_plugged_in(sys_reset_dev);	
+	return charger_in;
+}
+
+#endif //VENDOR_EDIT
 
 static void print_pon_reg(struct qpnp_pon *pon, u16 offset)
 {
@@ -755,6 +875,38 @@ static void bark_work_func(struct work_struct *work)
 err_return:
 	return;
 }
+
+#ifdef VENDOR_EDIT
+//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+static void backlight_work_func(struct work_struct *work)
+{
+	int rc;
+	u8 pon_rt_sts = 0;
+	struct qpnp_pon_config *cfg;
+	struct qpnp_pon *pon =
+		container_of(work, struct qpnp_pon, backlight_work.work);
+
+	cfg = qpnp_get_cfg(pon, PON_KPDPWR);
+	if (!cfg) {
+		dev_err(&pon->spmi->dev, "Invalid config pointer\n");
+		goto err_return;
+	}
+
+	rc = spmi_ext_register_readl(pon->spmi->ctrl, pon->spmi->sid,
+				QPNP_PON_RT_STS(pon->base), &pon_rt_sts, 1);
+	if (rc) {
+		dev_err(&pon->spmi->dev, "Unable to read PON RT status\n");
+		goto err_return;
+	}
+
+	if(pon_rt_sts)
+		lm3630_bank_a_update_status(0);
+	pr_err("====================%s add for close backlight ===============\n",__func__);
+
+err_return:
+	return;
+}
+#endif
 
 static irqreturn_t qpnp_resin_bark_irq(int irq, void *_pon)
 {
@@ -957,6 +1109,11 @@ qpnp_pon_request_irqs(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 							cfg->state_irq);
 			return rc;
 		}
+		pr_err("%s qpnp_cblpwr_status is triggered probe\n",__func__);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2015-05-15 add to use cbl_pwr to detect charger
+		enable_irq_wake(cfg->state_irq);
+#endif
 		break;
 	case PON_KPDPWR_RESIN:
 		if (cfg->use_bark) {
@@ -1487,6 +1644,10 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 
 	pon = devm_kzalloc(&spmi->dev, sizeof(struct qpnp_pon),
 							GFP_KERNEL);
+	#ifdef VENDOR_EDIT
+	//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+	INIT_DELAYED_WORK(&pon->backlight_work, backlight_work_func);
+	#endif
 	if (!pon) {
 		dev_err(&spmi->dev, "Can't allocate qpnp_pon\n");
 		return -ENOMEM;
@@ -1695,6 +1856,10 @@ static int qpnp_pon_remove(struct spmi_device *spmi)
 	device_remove_file(&spmi->dev, &dev_attr_debounce_us);
 
 	cancel_delayed_work_sync(&pon->bark_work);
+	#ifdef VENDOR_EDIT
+	//lile@EXP.BasicDrv.LCD, 2016-03-29, add for flash blue when shutdown
+	cancel_delayed_work_sync(&pon->backlight_work);
+	#endif
 
 	if (pon->pon_input)
 		input_unregister_device(pon->pon_input);

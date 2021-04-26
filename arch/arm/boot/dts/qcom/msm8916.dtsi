@@ -469,7 +469,7 @@
 		qcom,vdd-voltage-level = <1 5 7>;
 
 		qcom,hsusb-otg-phy-init-seq =
-			<0x44 0x80 0x6B 0x81 0x24 0x82 0x13 0x83 0xffffffff>;
+			<0x74 0x80 0x6B 0x81 0x24 0x82 0x13 0x83 0xffffffff>;
 		qcom,hsusb-otg-phy-type = <2>;
 		qcom,hsusb-otg-mode = <1>;
 		qcom,hsusb-otg-otg-control = <2>;
@@ -752,7 +752,11 @@
 		reg = <0xb017000 0x1000>;
 		reg-names = "wdt-base";
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
+		//#ifdef VENDOR_EDIT //yixue.ge modify bark time to 20s
+		//qcom,bark-time = <11000>;
+		//#else
+		qcom,bark-time = <20000>;
+		//#endif
 		qcom,pet-time = <10000>;
 		qcom,ipi-ping;
 	};

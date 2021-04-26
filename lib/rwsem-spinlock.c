@@ -151,6 +151,13 @@ void __sched __down_read(struct rw_semaphore *sem)
 		if (!waiter.task)
 			break;
 		schedule();
+		//#ifdef VENDOR_EDIT 
+		//fangpan@Swdp.shanghai,2015/11/12
+		if (hung_long_and_fatal_signal_pending(tsk)) {
+			list_del(&waiter.list);
+			break;
+		}
+		//#endif
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 	}
 
@@ -208,6 +215,12 @@ void __sched __down_write_nested(struct rw_semaphore *sem, int subclass)
 		 */
 		if (sem->activity == 0)
 			break;
+		//#ifdef VENDOR_EDIT 
+		//fangpan@Swdp.shanghai,2015/11/12
+		if (hung_long_and_fatal_signal_pending(tsk)) {
+			break;
+		}
+		//#endif
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 		raw_spin_unlock_irqrestore(&sem->wait_lock, flags);
 		schedule();

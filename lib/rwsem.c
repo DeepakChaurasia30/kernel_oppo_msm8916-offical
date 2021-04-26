@@ -179,6 +179,13 @@ struct rw_semaphore __sched *rwsem_down_read_failed(struct rw_semaphore *sem)
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 		if (!waiter.task)
 			break;
+		//#ifdef VENDOR_EDIT 
+		//fangpan@Swdp.shanghai,2015/11/12
+		if (hung_long_and_fatal_signal_pending(tsk)) {
+			list_del(&waiter.list);
+			break;
+		}
+		//#endif
 		schedule();
 	}
 
@@ -234,13 +241,23 @@ struct rw_semaphore __sched *rwsem_down_write_failed(struct rw_semaphore *sem)
 
 		/* Block until there are no active lockers. */
 		do {
+			//#ifdef VENDOR_EDIT 
+			//fangpan@Swdp.shanghai,2015/11/12
+			if (hung_long_and_fatal_signal_pending(tsk)) {
+				raw_spin_lock_irq(&sem->wait_lock);
+				goto out;
+			}
+			//#endif
 			schedule();
 			set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 		} while ((count = sem->count) & RWSEM_ACTIVE_MASK);
 
 		raw_spin_lock_irq(&sem->wait_lock);
 	}
-
+//#ifdef VENDOR_EDIT 
+//fangpan@Swdp.shanghai,2015/11/12
+out:
+//#endif
 	list_del(&waiter.list);
 	raw_spin_unlock_irq(&sem->wait_lock);
 	tsk->state = TASK_RUNNING;

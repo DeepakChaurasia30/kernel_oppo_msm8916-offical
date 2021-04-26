@@ -66,6 +66,16 @@ void __weak panic_smp_self_stop(void)
 		cpu_relax();
 }
 
+#ifdef VENDOR_EDIT
+/* OPPO 2012-10-11 chendx Add begin for debug tools */
+extern bool is_otrace_on(void);
+/* OPPO 2012-10-11 chendx Add end */
+/* OPPO 2015-11-04 fangpan@oppo.com modify the crash save tool*/
+#define MAX_PANIC_STRING 20
+extern char panic_reason[MAX_PANIC_STRING];
+/* OPPO 2015-11-04 fangpan@oppo.com modify the crash save tool*/
+#endif //VENDOR_EDIT
+
 /**
  *	panic - halt the system
  *	@fmt: The text string to print
@@ -140,6 +150,21 @@ void panic(const char *fmt, ...)
 
 	if (!panic_blink)
 		panic_blink = no_blink;
+
+#ifdef VENDOR_EDIT
+/* OPPO 2012-10-11 chendx Add begin for debug tools */
+    pr_info("kernel panic because of %s\n", fmt);
+
+	if(!is_otrace_on()) {
+		if (strcmp(fmt, "modem") == 0)
+			strcpy(panic_reason, fmt);
+		else if (strcmp(fmt, "android") == 0)
+			strcpy(panic_reason, fmt);
+		else
+			strcpy(panic_reason, "kernel");
+	}
+/* OPPO 2012-10-11 chendx Add end */
+#endif  //VENDOR_EDIT
 
 	if (panic_timeout > 0) {
 		/*

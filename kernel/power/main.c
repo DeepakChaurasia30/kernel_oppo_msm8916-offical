@@ -15,6 +15,7 @@
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
+#include <linux/rtc.h>
 
 #include "power.h"
 
@@ -215,17 +216,70 @@ static int suspend_stats_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, suspend_stats_show, NULL);
 }
+//#ifdef VENDOR_EDIT
+//yanzhen.feng@Swdp.Android.Framework, 2015/08/14, Sync App and Kernel time
+static ssize_t watchdog_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+	s32 value;
+    struct timespec ts;
+	struct rtc_time tm;
+
+	if (count == sizeof(s32)) {
+		if (copy_from_user(&value, buf, sizeof(s32)))
+			return -EFAULT;
+	} else if (count <= 11) { /* ASCII perhaps? */
+		char ascii_value[11];
+		unsigned long int ulval;
+		int ret;
+
+		if (copy_from_user(ascii_value, buf, count))
+			return -EFAULT;
+
+		if (count > 10) {
+			if (ascii_value[10] == '\n')
+				ascii_value[10] = '\0';
+			else
+				return -EINVAL;
+		} else {
+			ascii_value[count] = '\0';
+		}
+		ret = kstrtoul(ascii_value, 16, &ulval);
+		if (ret) {
+			pr_debug("%s, 0x%lx, 0x%x\n", ascii_value, ulval, ret);
+			return -EINVAL;
+		}
+		value = (s32)lower_32_bits(ulval);
+	} else {
+		return -EINVAL;
+	}
+
+	getnstimeofday(&ts);
+	rtc_time_to_tm(ts.tv_sec, &tm);
+	pr_warn("!@WatchDog_%d; %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
+		value, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
+
+	return count;
+}
+//#endif /* VENDOR_EDIT */
 
 static const struct file_operations suspend_stats_operations = {
 	.open           = suspend_stats_open,
 	.read           = seq_read,
 	.llseek         = seq_lseek,
 	.release        = single_release,
+	//#ifdef VENDOR_EDIT
+	//yanzhen.feng@Swdp.Android.Framework, 2015/08/14, Sync App and Kernel time
+	.write          = watchdog_write,
+	//#endif /* VENDOR_EDIT */
 };
 
 static int __init pm_debugfs_init(void)
 {
-	debugfs_create_file("suspend_stats", S_IFREG | S_IRUGO,
+	//#ifdef VENDOR_EDIT
+	//yanzhen.feng@Swdp.Android.Framework, 2015/08/14, Sync App and Kernel time
+	debugfs_create_file("suspend_stats", S_IFREG | S_IRUGO | S_IWUGO,
+	//#endif /* VENDOR_EDIT */
 			NULL, NULL, &suspend_stats_operations);
 	return 0;
 }
@@ -511,6 +565,53 @@ power_attr(wake_unlock);
 #endif /* CONFIG_PM_WAKELOCKS */
 #endif /* CONFIG_PM_SLEEP */
 
+#ifdef VENDOR_EDIT
+/* OPPO 2012-11-05 heiwei Modify begin for add interface start reason and boot_mode begin */
+extern char pwron_event[];
+
+static ssize_t startup_mode_show(struct kobject *kobj, struct kobj_attribute *attr,
+			     char *buf)
+{
+	return sprintf(buf, "%s", pwron_event);
+}
+
+static ssize_t startup_mode_store(struct kobject *kobj, struct kobj_attribute *attr,
+			   const char *buf, size_t n)
+{
+	return 0;
+}
+power_attr(startup_mode);
+
+extern char boot_mode[];
+static ssize_t app_boot_show(struct kobject *kobj, struct kobj_attribute *attr,
+			     char *buf)
+{
+#if 1
+	return sprintf(buf, "%s", boot_mode);
+#else
+    if (reboot_reason == 0x77665501)
+        return sprintf(buf, "reboot");
+    else if (reboot_reason == 0x7766550a)
+        return sprintf(buf, "kernel");
+    else if (reboot_reason == 0x7766550b)
+        return sprintf(buf, "modem");
+    else if (reboot_reason == 0x7766550c)
+        return sprintf(buf, "android");
+    else
+        return sprintf(buf, "normal");
+#endif
+}
+ 
+static ssize_t app_boot_store(struct kobject *kobj, struct kobj_attribute *attr,
+			   const char *buf, size_t n)
+{	
+	return 0;
+}
+power_attr(app_boot);
+/* OPPO 2012-11-05 Van heiwei begin for add interface start reason and boot_mode end */
+#endif //VENDOR_EDIT
+
+
 #ifdef CONFIG_PM_TRACE
 int pm_trace_enabled;
 
@@ -603,6 +704,13 @@ static struct attribute * g[] = {
 #ifdef CONFIG_FREEZER
 	&pm_freeze_timeout_attr.attr,
 #endif
+
+#ifdef VENDOR_EDIT
+/* OPPO 2012-11-05 heiwei Modify begin for add interface start reason and boot_mode begin */
+	&app_boot_attr.attr,
+	&startup_mode_attr.attr,
+/* OPPO 2012-11-05 heiwei Modify begin for add interface start reason and boot_mode end */
+#endif //VENDOR_EDIT
 	NULL,
 };
 

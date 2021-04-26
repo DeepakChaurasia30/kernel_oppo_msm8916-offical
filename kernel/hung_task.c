@@ -15,7 +15,20 @@
 #include <linux/lockdep.h>
 #include <linux/export.h>
 #include <linux/sysctl.h>
+#include <linux/sched.h>
 
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+#include <linux/slab.h>
+#define HUNG_TIMES 3
+struct hung_task {
+	struct list_head list;
+	struct task_struct *tsk;
+	int updated;   /*this flag used to indicate whether this hung task is alive*/
+	int hung_count;  /*if this count is larger than HUNG_TIMES, will kill it*/
+};
+struct list_head hung_task_list;
+//struct mutex hung_task_lock;
+#endif
 /*
  * The number of tasks checked:
  */
@@ -59,15 +72,55 @@ __setup("hung_task_panic=", hung_task_panic_setup);
 static int
 hung_task_panic(struct notifier_block *this, unsigned long event, void *ptr)
 {
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+	struct hung_task* task_item, * tmp;
+	printk(KERN_ERR "dump all the hung tasks");
+	if(!list_empty(&hung_task_list)) {
+		list_for_each_entry_safe(task_item, tmp, &hung_task_list, list)
+			sched_show_task(task_item->tsk);
+	}
+#endif
 	did_panic = 1;
-
 	return NOTIFY_DONE;
 }
 
 static struct notifier_block panic_block = {
 	.notifier_call = hung_task_panic,
 };
-
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+static int update_hung_task_list(struct task_struct *t)
+{
+	struct hung_task* task_item, *tmp;
+	struct hung_task* hung;
+	if(!list_empty(&hung_task_list)) {
+		list_for_each_entry_safe(task_item, tmp, &hung_task_list, list)
+			if(task_item->tsk == t) {
+				task_item->updated = 1;
+				task_item->hung_count++;
+				if(fatal_signal_pending(t) && task_item->hung_count >= HUNG_TIMES) {
+					t->flags |= PF_OPPO_KILLING; /*this will mark the Dstate killing flag*/
+					printk(KERN_ERR "INFO: Now can clean the Uninterrupted task %s\n", t->comm);
+					wake_up_process(t);
+					/*clean up the task_item too*/
+					list_del(&task_item->list);
+					kfree(task_item);
+					return -EINTR; 
+				}
+				return 0;
+			}
+	}
+	hung = (struct hung_task*)kmalloc(sizeof(struct hung_task), GFP_ATOMIC);
+	if(hung == NULL) {
+		printk(KERN_ERR "can't save the hung task %s\n", t->comm);
+		return -ENOMEM;
+	}
+	hung->tsk = t;
+	hung->updated = 1;
+	hung->hung_count = 1;
+	list_add(&hung->list, &hung_task_list);
+	return 0;
+}
+#endif
 static void check_hung_task(struct task_struct *t, unsigned long timeout)
 {
 	unsigned long switch_count = t->nvcsw + t->nivcsw;
@@ -91,6 +144,10 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 		t->last_switch_count = switch_count;
 		return;
 	}
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/11/12 add the hung task detect
+	if(update_hung_task_list(t))
+		return;
+#endif
 	if (!sysctl_hung_task_warnings)
 		return;
 	sysctl_hung_task_warnings--;
@@ -147,6 +204,9 @@ static void check_hung_uninterruptible_tasks(unsigned long timeout)
 	int max_count = sysctl_hung_task_check_count;
 	int batch_count = HUNG_TASK_BATCHING;
 	struct task_struct *g, *t;
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+	struct hung_task* task_item, * tmp;
+#endif
 
 	/*
 	 * If the system crashed already then all bets are off,
@@ -170,6 +230,18 @@ static void check_hung_uninterruptible_tasks(unsigned long timeout)
 	} while_each_thread(g, t);
  unlock:
 	rcu_read_unlock();
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+	if(!list_empty(&hung_task_list)) {
+		list_for_each_entry_safe(task_item, tmp, &hung_task_list, list)
+			if(task_item->updated == 0) {
+				list_del(&task_item->list);
+				kfree(task_item);
+			} else {
+				task_item->updated = 0;
+			}
+	} else
+		sysctl_hung_task_warnings = 10;
+#endif
 }
 
 static unsigned long timeout_jiffies(unsigned long timeout)
@@ -221,6 +293,9 @@ static int __init hung_task_init(void)
 {
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_block);
 	watchdog_task = kthread_run(watchdog, NULL, "khungtaskd");
+#ifdef VENDOR_EDIT //fangpan@oppo.com,2015/11/12
+	INIT_LIST_HEAD(&hung_task_list);
+#endif
 
 	return 0;
 }

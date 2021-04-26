@@ -5007,10 +5007,14 @@ do_wait_for_common(struct completion *x,
 
 		__add_wait_queue_tail_exclusive(&x->wait, &wait);
 		do {
-			if (signal_pending_state(state, current)) {
+			//#ifdef VENDOR_EDIT 
+			//fangpan@Swdp.shanghai,2015/11/12
+			if (signal_pending_state(state, current) || hung_long_and_fatal_signal_pending(current)) {
+			//#endif
 				timeout = -ERESTARTSYS;
 				break;
 			}
+
 			__set_current_state(state);
 			spin_unlock_irq(&x->wait.lock);
 			timeout = action(timeout);

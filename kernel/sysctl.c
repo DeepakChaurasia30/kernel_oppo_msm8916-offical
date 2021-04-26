@@ -671,6 +671,16 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+	{
+		.procname	= "print_fatal_murder",
+		.data		= &print_system_murder,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+#endif
 #ifdef CONFIG_SPARC
 	{
 		.procname	= "reboot-cmd",

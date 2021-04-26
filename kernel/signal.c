@@ -49,6 +49,10 @@
 
 static struct kmem_cache *sigqueue_cachep;
 
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+int print_system_murder __read_mostly;
+#endif
 int print_fatal_signals __read_mostly;
 
 static void __user *sig_handler(struct task_struct *t, int sig)
@@ -771,7 +775,13 @@ static int kill_ok_by_cred(struct task_struct *t)
 	if (uid_eq(cred->euid, tcred->suid) ||
 	    uid_eq(cred->euid, tcred->uid)  ||
 	    uid_eq(cred->uid,  tcred->suid) ||
+	    #ifdef VENDOR_EDIT
+	    // liangkun@Swdp.shanghai 2015/11/18, give permission to system to send specific signal
+	    uid_eq(cred->uid,  tcred->uid)  ||
+	    cred->uid == 1000)
+	    #else
 	    uid_eq(cred->uid,  tcred->uid))
+	    #endif
 		return 1;
 
 	if (ns_capable(tcred->user_ns, CAP_KILL))
@@ -1042,7 +1052,29 @@ static inline void userns_fixup_signal_uid(struct siginfo *info, struct task_str
 	return;
 }
 #endif
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+static bool is_zygote_process(struct task_struct *t)
+{
+	const struct cred *tcred = __task_cred(t);
 
+	struct task_struct * first_child = NULL;
+	if(t->children.next && t->children.next != (struct list_head*)&t->children.next)
+		first_child = container_of(t->children.next, struct task_struct, sibling);
+	if(!strcmp(t->comm, "main") && (tcred->uid == 0) && first_child != NULL && !strcmp(first_child->comm, "system_server")  )
+		return true;
+	else
+		return false;
+	return false;
+}
+
+static int __init setup_print_system_murder(char *str)
+{
+		get_option(&str, &print_system_murder);
+		return 1;
+}
+__setup("print_system_murder=", setup_print_system_murder);
+#endif
 static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 			int group, int from_ancestor_ns)
 {
@@ -1054,10 +1086,25 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 	assert_spin_locked(&t->sighand->siglock);
 
 	result = TRACE_SIGNAL_IGNORED;
+
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+//#Siting.Mo@EXP.SysFramework, modify for catch more signal info for zygote and system server
+	if(print_system_murder) { 
+		/*add the SIGKILL print log for some debug*/
+		//if((sig == SIGKILL || sig == SIGSTOP || sig == SIGABRT || sig == SIGTERM || sig == SIGCONT) && (!strcmp(t->comm, "system_server") || is_zygote_process(t))) {
+		if((!(sig == SIGQUIT || sig == SIGUSR1 || sig == SIGPIPE || sig == SIGCHLD || sig == SIGURG || sig == SIGWINCH)) && (!strcmp(t->comm, "system_server") || is_zygote_process(t))) {
+			printk("Some other process %d:%s want to kill sig:%d %d:%s\n", current->pid, current->comm,sig, t->pid, t->comm);
+			//#ifdef VENDOR_EDIT
+			/* OPPO 2015-12-11 fangpan@Swdp.shanghai remove the abort operation for the send process*/
+			//#endif
+		}
+	}
+#endif
+
 	if (!prepare_signal(sig, t,
 			from_ancestor_ns || (info == SEND_SIG_FORCED)))
 		goto ret;
-
 	pending = group ? &t->signal->shared_pending : &t->pending;
 	/*
 	 * Short-circuit ignored signals and support queuing

@@ -370,7 +370,11 @@ slowpath:
 		 * got a signal? (This code gets eliminated in the
 		 * TASK_UNINTERRUPTIBLE case.)
 		 */
-		if (unlikely(signal_pending_state(state, task))) {
+		//#ifdef VENDOR_EDIT 
+		//fangpan@Swdp.shanghai,2015/11/12
+		if (unlikely(signal_pending_state(state, task)) 
+				|| hung_long_and_fatal_signal_pending(task)) {
+		//#endif
 			mutex_remove_waiter(lock, &waiter,
 					    task_thread_info(task));
 			mutex_release(&lock->dep_map, 1, ip);

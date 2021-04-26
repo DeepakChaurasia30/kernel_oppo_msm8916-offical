@@ -32,6 +32,12 @@
 #include "kgsl_cffdump.h"
 #include "kgsl_pwrctrl.h"
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+#include <soc/oppo/mmkey_log.h>
+#endif /*VENDOR_EDIT*/
+
+
 static struct kgsl_iommu_register_list kgsl_iommuv0_reg[KGSL_IOMMU_REG_MAX] = {
 	{ 0, 0 },			/* GLOBAL_BASE */
 	{ 0x0, 1 },			/* SCTLR */
@@ -401,6 +407,11 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	if (!no_page_fault_log) {
 		KGSL_MEM_CRIT(iommu_dev->kgsldev,
 			"GPU PAGE FAULT: addr = %lX pid = %d\n", addr, pid);
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+		mm_keylog_write("kgsl iommu fault\n", "GPU PAGE FAULT\n", TYPE_IOMMU_ERROR);
+#endif /*VENDOR_EDIT*/
+
 		KGSL_MEM_CRIT(iommu_dev->kgsldev,
 		 "context = %d TTBR0 = %X FSR = %X FSYNR0 = %X FSYNR1 = %X(%s fault)\n",
 			iommu_dev->ctx_id, ptbase, fsr, fsynr0, fsynr1,

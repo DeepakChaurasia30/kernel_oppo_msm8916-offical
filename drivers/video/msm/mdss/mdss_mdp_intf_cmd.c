@@ -19,6 +19,12 @@
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+#include <soc/oppo/mmkey_log.h>
+#endif /*VENDOR_EDIT*/
+
+
 #define VSYNC_EXPIRE_TICK 6
 
 #define MAX_SESSIONS 2
@@ -598,6 +604,10 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 				MDSS_MDP_REG_INTR_STATUS);
 		if (status) {
 			WARN(1, "pp done but irq not triggered\n");
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+			mm_keylog_write("mdss mdp cmd wait4pingpong exception\n", "pp done but irq not triggered\n", TYPE_VSYNC_EXCEPTION);
+#endif /*VENDOR_EDIT*/
 			mdss_mdp_irq_clear(ctl->mdata,
 					MDSS_MDP_IRQ_PING_PONG_COMP,
 					ctx->pp_num);
@@ -614,6 +624,11 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 		if (!ctx->pp_timeout_report_cnt) {
 			WARN(1, "cmd kickoff timed out (%d) ctl=%d\n",
 					rc, ctl->num);
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+			mm_keylog_write("mdss mdp cmd wait4pingpong exception\n", "cmd kickoff timed out\n", TYPE_VSYNC_EXCEPTION);
+#endif /*VENDOR_EDIT*/
+
 			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",
 					"edp", "hdmi", "panic");
 		}

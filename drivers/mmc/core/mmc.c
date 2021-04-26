@@ -2064,6 +2064,10 @@ int mmc_attach_mmc(struct mmc_host *host)
 	/*
 	 * Detect and init the card.
 	 */
+	#ifdef VENDOR_EDIT  //xiaohua.tian@EXP.driver add delay for new micron mcp,2016-7-29
+	msleep(50);
+	#endif
+
 	err = mmc_init_card(host, host->ocr, NULL);
 	if (err)
 		goto err;

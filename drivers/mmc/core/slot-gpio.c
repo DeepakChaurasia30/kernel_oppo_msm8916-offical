@@ -46,7 +46,6 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 	struct mmc_host *host = dev_id;
 	struct mmc_gpio *ctx = host->slot.handler_priv;
 	int status;
-
 	/*
 	 * In case host->ops are not yet initialized return immediately.
 	 * The card will get detected later when host driver calls
@@ -61,6 +60,16 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 	status = mmc_gpio_get_status(host);
 	if (unlikely(status < 0))
 		goto out;
+
+#ifdef VENDOR_EDIT
+        //Lycan.Wang@Prd.BasicDrv, 2014-07-10 Add for retry 5 times when new sdcard init error
+        host->detect_change_retry = 5;
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+        host->card_stuck_in_programing_status = false;
+#endif /* VENDOR_EDIT */
 
 	if (status ^ ctx->status) {
 		pr_info("%s: slot status change detected (%d -> %d), GPIO_ACTIVE_%s\n",
@@ -159,7 +168,6 @@ int mmc_gpio_request_ro(struct mmc_host *host, unsigned int gpio)
 		return ret;
 
 	ctx = host->slot.handler_priv;
-
 	ret = devm_gpio_request_one(&host->class_dev, gpio, GPIOF_DIR_IN,
 				    ctx->ro_label);
 	if (ret < 0)

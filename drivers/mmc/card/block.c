@@ -50,6 +50,13 @@
 
 #include "queue.h"
 
+#ifdef VENDOR_EDIT
+//Zhilong.Zhang@OnlineRd.Driver, 2013/10/24, Add for eMMC and DDR device information
+#include <soc/oppo/device_info.h>
+#include <soc/oppo/oppo_project.h>
+#endif /* VENDOR_EDIT */
+
+
 MODULE_ALIAS("mmc:block");
 #ifdef MODULE_PARAM_PREFIX
 #undef MODULE_PARAM_PREFIX
@@ -1620,6 +1627,10 @@ static int mmc_blk_err_check(struct mmc_card *card,
 					" %s %s\n", mmc_hostname(card->host),
 					req->rq_disk->disk_name, __func__);
 
+#ifdef VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+                                card->host->card_stuck_in_programing_status = true;
+#endif /* VENDOR_EDIT */
 				return MMC_BLK_CMD_ERR;
 			}
 			/*
@@ -2792,8 +2803,10 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		/* claim host only for the first request */
 		mmc_claim_host(card->host);
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-	if (mmc_bus_needs_resume(card->host))
-		mmc_resume_bus(card->host);
+	if(card->host->card->type == 0){ //added by songxh for qcom patch fot removed tf card had no notified when sleep  2015-06-29
+		if (mmc_bus_needs_resume(card->host))
+			mmc_resume_bus(card->host);
+	}
 #endif
 		if (card->ext_csd.bkops_en)
 			mmc_stop_bkops(card);
@@ -3284,12 +3297,67 @@ static int mmc_blk_probe(struct mmc_card *card)
 {
 	struct mmc_blk_data *md, *part_md;
 	char cap_str[10];
+	#ifdef VENDOR_EDIT
+	//Zhilong.Zhang@OnlineRd.Driver, 2013/10/24, Add for eMMC and DDR device information
+	char * manufacturerid;
+    static char temp_version[10];
+	/*struct manufacture_info ddr_info_1 = {
+		.version = "EDFA164A2PB",
+		.manufacture = "ELPIDA",
+	};
+	struct manufacture_info ddr_info_2 = {
+		.version = "K3QF7F70DM",
+		.manufacture = "SAMSUNG",
+	};*/
+	#endif /* VENDOR_EDIT */
 
 	/*
 	 * Check that the card supports the command class(es) we need.
 	 */
+#ifndef VENDOR_EDIT
+//yh@bsp, 2015/08/03, remove for can not initialize specific sdcard(CSD info mismatch card real capability)
 	if (!(card->csd.cmdclass & CCC_BLOCK_READ))
 		return -ENODEV;
+#endif
+
+	#ifdef VENDOR_EDIT
+//Zhilong.Zhang@OnlineRd.Driver, 2013/10/24, Add for eMMC and DDR device information
+	switch (card->cid.manfid) {
+		case  0x11:
+			manufacturerid = "TOSHIBA";
+			break;
+		case  0x15:
+			manufacturerid = "SAMSUNG";
+			break;
+		case  0x45:
+			manufacturerid = "SANDISK";
+			break;
+		case  0x90:
+			manufacturerid = "HYNIX";
+			break;
+		case 0xFE:
+                        manufacturerid = "ELPIDA";
+                        break;
+		#ifdef VENDOR_EDIT
+		//xiaohua.tian@EXP.Driver, 2016/02/29, Add for eMMC evice information
+		case  0x13:
+			manufacturerid = "MICRON";
+			break;
+		#endif
+                default:
+			manufacturerid = "unknown";
+			break;
+	}
+	if (!strcmp(mmc_card_id(card), "mmc0:0001")) {
+		sprintf(temp_version,"0x%x",card->cid.prv);
+		register_device_proc("emmc", mmc_card_name(card), manufacturerid);
+		register_device_proc("emmc_version", mmc_card_name(card), temp_version);
+		//if (get_PCB_Version() < HW_VERSION__20)
+		//	register_device_proc("ddr", ddr_info_1.version, ddr_info_1.manufacture);
+		//else
+		//	register_device_proc("ddr", ddr_info_2.version, ddr_info_2.manufacture);
+	}
+#endif /* VENDOR_EDIT */
 
 	md = mmc_blk_alloc(card);
 	if (IS_ERR(md))
@@ -3308,7 +3376,9 @@ static int mmc_blk_probe(struct mmc_card *card)
 	mmc_fixup_device(card, blk_fixups);
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-	mmc_set_bus_resume_policy(card->host, 1);
+	if(card->host->card->type == 0){ //added by songxh for qcom patch fot removed tf card had no notified when sleep  2015-06-29
+		mmc_set_bus_resume_policy(card->host, 1);
+	}
 #endif
 	if (mmc_add_disk(md))
 		goto out;
@@ -3336,7 +3406,9 @@ static void mmc_blk_remove(struct mmc_card *card)
 	mmc_blk_remove_req(md);
 	mmc_set_drvdata(card, NULL);
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
-	mmc_set_bus_resume_policy(card->host, 0);
+	if(card->host->card->type == 0){ //added by songxh for qcom patch fot removed tf card had no notified when sleep  2015-06-29
+		mmc_set_bus_resume_policy(card->host, 0);
+	}
 #endif
 }
 

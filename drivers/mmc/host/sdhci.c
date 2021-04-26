@@ -106,8 +106,20 @@ static void sdhci_dump_state(struct sdhci_host *host)
 	sdhci_dump_rpm_info(host);
 }
 
+#ifdef VENDOR_EDIT //yixue.ge@BSP.drv 2014-06-04 modify for disable sdcard log
+static int flag = 0;
+#endif
+
 static void sdhci_dumpregs(struct sdhci_host *host)
 {
+
+#ifdef VENDOR_EDIT //yixue.ge@BSP.drv 2014-06-04 modify for disable sdcard log
+	if(!flag)
+		flag++;
+	else
+		return;
+#endif
+
 	pr_info(DRIVER_NAME ": =========== REGISTER DUMP (%s)===========\n",
 		mmc_hostname(host->mmc));
 
@@ -1176,6 +1188,17 @@ static void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	unsigned long timeout;
 
 	WARN_ON(host->cmd);
+
+#ifdef VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+        if(host->mmc->card_stuck_in_programing_status && ((cmd->opcode == MMC_WRITE_MULTIPLE_BLOCK) || (cmd->opcode == MMC_WRITE_BLOCK)))
+        {
+                pr_info("blocked write cmd:%s\n", mmc_hostname(host->mmc));
+                cmd->error = -EIO;
+                tasklet_schedule(&host->finish_tasklet);
+                return;
+        }
+#endif /* VENDOR_EDIT */
 
 	/* Wait max 10 ms */
 	timeout = 10000;

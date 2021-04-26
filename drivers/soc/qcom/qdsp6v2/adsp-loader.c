@@ -21,6 +21,7 @@
 #include <linux/of_device.h>
 #include <linux/sysfs.h>
 #include <soc/qcom/subsystem_restart.h>
+#include <soc/oppo/mmkey_log.h>
 
 #define Q6_PIL_GET_DELAY_MS 100
 #define BOOT_CMD 1
@@ -63,6 +64,10 @@ static void adsp_loader_do(struct platform_device *pdev)
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev,
 			"%s: Device tree information missing\n", __func__);
+            #ifdef VENDOR_EDIT
+            //John.Xu@PhoneSw.AudioDriver, 2015/10/27, Add for critical log
+		    mm_keylog_write("Q6 image loading failed", "Device tree information missing", TYPE_ADSP_LOAD_FAIL);
+			#endif /* VENDOR_EDIT */
 		goto fail;
 	}
 
@@ -70,6 +75,10 @@ static void adsp_loader_do(struct platform_device *pdev)
 	if (rc) {
 		dev_err(&pdev->dev,
 			"%s: ADSP state = %x\n", __func__, adsp_state);
+        #ifdef VENDOR_EDIT
+        //John.Xu@PhoneSw.AudioDriver, 2015/10/27, Add for critical log
+        mm_keylog_write("Q6 image loading failed", "Device tree property missing", TYPE_ADSP_LOAD_FAIL);
+		#endif /* VENDOR_EDIT */
 		goto fail;
 	}
 
@@ -88,6 +97,10 @@ static void adsp_loader_do(struct platform_device *pdev)
 			if (!priv) {
 				dev_err(&pdev->dev,
 				" %s: Private data get failed\n", __func__);
+                #ifdef VENDOR_EDIT
+                //John.Xu@PhoneSw.AudioDriver, 2015/10/27, Add for critical log
+				mm_keylog_write("Q6 image loading failed", "Private data get failed", TYPE_ADSP_LOAD_FAIL);
+			    #endif /* VENDOR_EDIT */
 				goto fail;
 			}
 
@@ -95,6 +108,10 @@ static void adsp_loader_do(struct platform_device *pdev)
 			if (IS_ERR(priv->pil_h)) {
 				dev_err(&pdev->dev, "%s: pil get failed,\n",
 					__func__);
+                #ifdef VENDOR_EDIT
+                //John.Xu@PhoneSw.AudioDriver, 2015/10/27, Add for critical log
+				mm_keylog_write("Q6 image loading failed", "pil get failed", TYPE_ADSP_LOAD_FAIL);
+			    #endif /* VENDOR_EDIT */
 				goto fail;
 			}
 

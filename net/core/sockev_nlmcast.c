@@ -75,6 +75,9 @@ static int sockev_client_cb(struct notifier_block *nb,
 	if ((socknlmsgsk == NULL) || (sock == NULL) || (sock->sk == NULL))
 		goto done;
 
+	if (event != SOCKEV_BIND && event != SOCKEV_LISTEN)
+		goto done;
+
 	skb = nlmsg_new(sizeof(struct sknlsockevmsg), GFP_KERNEL);
 	if (skb == NULL)
 		goto done;

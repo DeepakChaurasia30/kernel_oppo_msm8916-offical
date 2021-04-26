@@ -363,6 +363,12 @@ struct file *sock_alloc_file(struct socket *sock, int flags, const char *dname)
 	struct qstr name = { .name = "" };
 	struct path path;
 	struct file *file;
+#ifdef VENDOR_EDIT
+//Peirs@Swdp.Android.frameworkUI, 2015.08.01, add for net comsuption statistics for
+//process which use the same uid.
+	struct pid *pid;
+	struct task_struct *task;
+#endif /* VENDOR_EDIT */
 
 	if (dname) {
 		name.name = dname;
@@ -387,6 +393,19 @@ struct file *sock_alloc_file(struct socket *sock, int flags, const char *dname)
 		path_put(&path);
 		return file;
 	}
+
+#ifdef VENDOR_EDIT
+//Peirs@Swdp.Android.frameworkUI, 2015.08.01, add for net comsuption statistics for
+//process which use the same uid.
+	pid = find_get_pid(current->tgid);
+	if (pid) {
+		task = get_pid_task(pid, PIDTYPE_PID);
+		if (task)
+			strncpy(sock->cmdline, task->comm, TASK_COMM_LEN);
+		put_task_struct(task);
+	}
+	put_pid(pid);
+#endif /* VENDOR_EDIT */
 
 	sock->file = file;
 	file->f_flags = O_RDWR | (flags & O_NONBLOCK);

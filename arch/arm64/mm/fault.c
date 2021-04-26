@@ -39,8 +39,13 @@
 
 #include <trace/events/exception.h>
 
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#ifdef CONFIG_DEBUG_USER
+//#endif
 static const char *fault_name(unsigned int esr);
-
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#endif
+//#endif
 /*
  * Dump out the page tables associated with 'addr' in mm 'mm'.
  */
@@ -50,10 +55,17 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 
 	if (!mm)
 		mm = &init_mm;
-
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv add for can print at pstore
 	pr_alert("pgd = %p\n", mm->pgd);
+	#else
+	pr_emerg("pgd = %p\n", mm->pgd);
+	#endif
 	pgd = pgd_offset(mm, addr);
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv add for can print at pstore
 	pr_alert("[%08lx] *pgd=%016llx", addr, pgd_val(*pgd));
+	#else
+	pr_emerg("[%08lx] *pgd=%016llx", addr, pgd_val(*pgd));
+	#endif
 
 	do {
 		pud_t *pud;
@@ -96,9 +108,15 @@ static void __do_kernel_fault(struct mm_struct *mm, unsigned long addr,
 	 * No handler, we'll have to terminate things with extreme prejudice.
 	 */
 	bust_spinlocks(1);
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv add for can print at pstore
 	pr_alert("Unable to handle kernel %s at virtual address %08lx\n",
 		 (addr < PAGE_SIZE) ? "NULL pointer dereference" :
 		 "paging request", addr);
+	#else
+	pr_emerg("Unable to handle kernel %s at virtual address %08lx\n",
+		 (addr < PAGE_SIZE) ? "NULL pointer dereference" :
+		 "paging request", addr);
+	#endif
 
 	show_pte(mm, addr);
 	die("Oops", regs, esr);
@@ -117,6 +135,9 @@ static void __do_user_fault(struct task_struct *tsk, unsigned long addr,
 	struct siginfo si;
 
 	trace_user_fault(tsk, addr, esr);
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#ifdef CONFIG_DEBUG_USER
+//#endif
 
 	if (show_unhandled_signals && unhandled_signal(tsk, sig) &&
 	    printk_ratelimit()) {
@@ -126,7 +147,9 @@ static void __do_user_fault(struct task_struct *tsk, unsigned long addr,
 		show_pte(tsk->mm, addr);
 		show_regs(regs);
 	}
-
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#endif
+//#endif
 	tsk->thread.fault_address = addr;
 	tsk->thread.fault_code = esr;
 	si.si_signo = sig;
@@ -444,12 +467,17 @@ static struct fault_info {
 	{ do_bad,		SIGBUS,  0,		"unknown 63"			},
 };
 
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#ifdef CONFIG_DEBUG_USER
+//#endif
 static const char *fault_name(unsigned int esr)
 {
 	const struct fault_info *inf = fault_info + (esr & 63);
 	return inf->name;
 }
-
+//#ifdef VENDOR_EDIT //yixue.ge add for close user debug at release build
+#endif
+//#endif
 /*
  * Dispatch a data abort to the relevant handler.
  */
@@ -462,8 +490,13 @@ asmlinkage void __exception do_mem_abort(unsigned long addr, unsigned int esr,
 	if (!inf->fn(addr, esr, regs))
 		return;
 
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv add for can print at pstore
 	pr_alert("Unhandled fault: %s (0x%08x) at 0x%016lx\n",
 		 inf->name, esr, addr);
+	#else
+	pr_emerg("Unhandled fault: %s (0x%08x) at 0x%016lx\n",
+		 inf->name, esr, addr);
+	#endif
 
 	info.si_signo = inf->sig;
 	info.si_errno = 0;
@@ -520,9 +553,13 @@ asmlinkage int __exception do_debug_exception(unsigned long addr,
 
 	if (!inf->fn(addr, esr, regs))
 		return 1;
-
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv add for can print at pstore
 	pr_alert("Unhandled debug exception: %s (0x%08x) at 0x%016lx\n",
 		 inf->name, esr, addr);
+	#else
+	pr_emerg("Unhandled debug exception: %s (0x%08x) at 0x%016lx\n",
+		 inf->name, esr, addr);
+	#endif
 
 	info.si_signo = inf->sig;
 	info.si_errno = 0;

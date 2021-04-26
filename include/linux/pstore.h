@@ -35,6 +35,10 @@ enum pstore_type_id {
 	PSTORE_TYPE_MCE		= 1,
 	PSTORE_TYPE_CONSOLE	= 2,
 	PSTORE_TYPE_FTRACE	= 3,
+//#ifdef VENDOR_EDIT
+//Geliang.Tang@Swdp.Android.OppoDebug.Pstore, 2015/12/14, add pmsg
+	PSTORE_TYPE_PMSG	= 4,
+//#endif /* VENDOR_EDIT */
 	PSTORE_TYPE_UNKNOWN	= 255
 };
 

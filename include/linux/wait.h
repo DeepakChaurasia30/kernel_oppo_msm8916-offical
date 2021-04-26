@@ -173,6 +173,7 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 #define wake_up_interruptible_sync_poll(x, m)				\
 	__wake_up_sync_key((x), TASK_INTERRUPTIBLE, 1, (void *) (m))
 
+//#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/11/12
 #define __wait_event(wq, condition) 					\
 do {									\
 	DEFINE_WAIT(__wait);						\
@@ -182,10 +183,13 @@ do {									\
 		if (condition)						\
 			break;						\
 		schedule();						\
+		if(hung_long_and_fatal_signal_pending(current)) { \
+			break;\
+		}\
 	}								\
 	finish_wait(&wq, &__wait);					\
 } while (0)
-
+//#endif
 /**
  * wait_event - sleep until a condition gets true
  * @wq: the waitqueue to wait on

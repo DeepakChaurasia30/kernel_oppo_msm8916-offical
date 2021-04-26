@@ -70,7 +70,13 @@ phys_addr_t cma_get_base(struct device *dev);
 unsigned long cma_get_size(struct device *dev);
 
 extern struct cma *dma_contiguous_def_area;
+#ifdef VENDOR_EDIT
+	/* OPPO 2015-11-04 fangpan@oppo.com modify the crash save tool*/
+extern phys_addr_t dma_contiguous_def_base;
 
+extern phys_addr_t cma_get_base_byname(char *name);
+extern unsigned long cma_get_size_byname(char *name);
+#endif
 void dma_contiguous_reserve(phys_addr_t addr_limit);
 
 int dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t *res_base,
@@ -125,6 +131,19 @@ bool dma_release_from_contiguous(struct device *dev, unsigned long pfn,
 #else
 
 #define MAX_CMA_AREAS	(0)
+#ifdef VENDOR_EDIT
+	/* OPPO 2015-11-04 fangpan@oppo.com modify the crash save tool*/
+extern phys_addr_t dma_contiguous_def_base;
+
+phys_addr_t cma_get_base_byname(char *name)
+{
+	return 0;
+}
+unsigned long cma_get_size_byname(char *name)
+{
+	return 0;
+}
+#endif
 
 static inline void dma_contiguous_reserve(phys_addr_t limit) { }
 

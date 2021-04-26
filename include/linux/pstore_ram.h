@@ -81,6 +81,10 @@ struct ramoops_platform_data {
 	unsigned long	record_size;
 	unsigned long	console_size;
 	unsigned long	ftrace_size;
+//#ifdef VENDOR_EDIT
+//Geliang.Tang@Swdp.Android.OppoDebug.Pstore, 2015/12/14, add pmsg
+	unsigned long   pmsg_size;
+//#endif /* VENDOR_EDIT */
 	int		dump_oops;
 	struct persistent_ram_ecc_info ecc_info;
 };

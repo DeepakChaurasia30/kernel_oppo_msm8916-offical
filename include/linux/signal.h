@@ -8,6 +8,11 @@ struct task_struct;
 
 /* for sysctl */
 extern int print_fatal_signals;
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+/* for sysctl */
+extern int print_system_murder;
+#endif
 /*
  * Real Time signals may be queued.
  */

@@ -1745,6 +1745,10 @@ static inline void sched_set_io_is_busy(int val) {};
  * Per process flags
  */
 #define PF_EXITING	0x00000004	/* getting shut down */
+#ifdef VENDOR_EDIT
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, set the task to be killed */
+#define PF_OPPO_KILLING	0x00000002
+#endif
 #define PF_EXITPIDONE	0x00000008	/* pi exit done on shut down */
 #define PF_VCPU		0x00000010	/* I'm a virtual CPU */
 #define PF_WQ_WORKER	0x00000020	/* I'm a workqueue worker */
@@ -2579,6 +2583,16 @@ static inline int fatal_signal_pending(struct task_struct *p)
 {
 	return signal_pending(p) && __fatal_signal_pending(p);
 }
+//#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/11/12
+static inline int hung_long_and_fatal_signal_pending(struct task_struct *p)
+{
+#ifdef CONFIG_DETECT_HUNG_TASK
+	return fatal_signal_pending(p) && (p->flags & PF_OPPO_KILLING);
+#else
+	return 0;
+#endif
+}
+//#endif
 
 static inline int signal_pending_state(long state, struct task_struct *p)
 {

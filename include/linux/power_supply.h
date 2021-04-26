@@ -46,6 +46,11 @@ enum {
 	POWER_SUPPLY_CHARGE_TYPE_TRICKLE,
 	POWER_SUPPLY_CHARGE_TYPE_FAST,
 	POWER_SUPPLY_CHARGE_TYPE_TAPER,
+#ifdef VENDOR_EDIT	
+	/*OPPO 2013-10-22 liaofuchun add for bq24196 charger*/
+	POWER_SUPPLY_CHARGE_TYPE_TERMINATE,
+	/*OPPO 2013-10-28 liaofuchun add end*/
+#endif	
 };
 
 enum {
@@ -164,9 +169,43 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	//#ifdef VENDOR_EDIT
+	POWER_SUPPLY_PROP_AUTHENTICATE,//wangjc add for authentication
+	POWER_SUPPLY_PROP_CHARGE_TIMEOUT,
+	POWER_SUPPLY_PROP_FAST_CHARGE,
+	POWER_SUPPLY_PROP_TEMP_STATU,
+	POWER_SUPPLY_PROP_USB_TYPE,
+	POWER_SUPPLY_PROP_BATTERY_REQUEST_POWEROFF,
+	POWER_SUPPLY_PROP_FAST_CHARGE_PROJECT,	//wangjc add for fast charge project sign
+	POWER_SUPPLY_PROP_BATTERY_FCC,			//dengnw add for battery fcc
+	POWER_SUPPLY_PROP_BATTERY_SOH,			//dengnw add for battery soh
+	POWER_SUPPLY_PROP_BATTERY_CC,			//dengnw add for battery soh
+	POWER_SUPPLY_PROP_BATTERY_CHARGER_ENABLE,//dengnw add for charger enable for mmi test
+	POWER_SUPPLY_PROP_BATTERY_NOTIFY,		//dengnw add for charging status
+	//#endif
+	//#ifdef VENDOR_EDIT
+	//Fuchun.Liao@Mobile.BSP.CHG 2015-02-13 add for otg_switch in 14043
+	POWER_SUPPLY_PROP_OTG_SWITCH,
+	//#endif
+	#ifdef VENDOR_EDIT
+	/* ChaoYing.Chen@EXP.BSP.USB.OTG, 2017/05/23, Add for OTG online */
+	POWER_SUPPLY_PROP_OTG_ONLINE,
+	#endif /* VENDOR_EDIT */
+//#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2015-02-13 add for otg_switch in 14043
+	POWER_SUPPLY_PROP_POWER_OFF,
+//#endif
+//#ifdef VENDOR_EDIT
+/* OPPO 2015-08-25 sjc Add for shipping_mode */
+	POWER_SUPPLY_PROP_SHIPPING_MODE,
+//#endif
 	POWER_SUPPLY_PROP_FLASH_CURRENT_MAX,
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
+#ifdef VENDOR_EDIT
+	/*chaoying.chen@EXP.BaseDrv.charge,2016/02/16 add internal capacity node for 15399 */
+	POWER_SUPPLY_PROP_INTERNAL_CAPACITY,
+#endif //VENDOR_EDIT
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,

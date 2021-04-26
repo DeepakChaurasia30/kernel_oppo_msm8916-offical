@@ -286,5 +286,9 @@ static inline struct mux_div_clk *to_mux_div_clk(struct clk *clk)
 }
 
 extern struct clk_ops clk_ops_mux_div_clk;
-
+#ifdef VENDOR_EDIT//yixue.ge modify for feedback log
+extern struct clk_ops clk_ops_mux_div_clk_bc;
+extern struct clk_ops clk_ops_mux_div_clk_lc;
+extern struct clk_ops clk_ops_mux_div_clk_cci;
+#endif
 #endif

@@ -1174,6 +1174,10 @@ static int msm_venc_queue_setup(struct vb2_queue *q,
 	rc = msm_comm_try_state(inst, MSM_VIDC_OPEN_DONE);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to open instance\n");
+		#ifdef VENDOR_EDIT
+        //Xiaopeng.Hu@MultiMediaService ,2016/02/04, for app make max en/decoder clients ,fail to open instance,qcom patch
+        msm_comm_session_clean(inst);
+        #endif /* VENDOR_EDIT */
 		return rc;
 	}
 
@@ -3224,6 +3228,10 @@ int msm_venc_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 		rc = msm_comm_try_state(inst, MSM_VIDC_OPEN_DONE);
 		if (rc) {
 			dprintk(VIDC_ERR, "Failed to open instance\n");
+			#ifdef VENDOR_EDIT
+            //Xiaopeng.Hu@MultiMediaService ,2016/02/04, for app make max en/decoder clients ,fail to open instance,qcom patch
+            msm_comm_session_clean(inst);
+            #endif /* VENDOR_EDIT */
 			goto exit;
 		}
 

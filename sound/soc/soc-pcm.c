@@ -2432,8 +2432,13 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 
 	pcm->private_free = platform->driver->pcm_free;
 out:
+#ifndef VENDOR_EDIT //Jianfeng.Qiu@Multimedia.Audio, 2015/09/23, Modify for reduce log to optimize boot speed.
 	dev_info(rtd->card->dev, " %s <-> %s mapping ok\n", codec_dai->name,
 		cpu_dai->name);
+#else /* VENDOR_EDIT */
+	dev_dbg(rtd->card->dev, " %s <-> %s mapping ok\n", codec_dai->name,
+		cpu_dai->name);
+#endif /* VENDOR_EDIT */
 	return ret;
 }
 

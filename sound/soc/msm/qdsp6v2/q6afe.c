@@ -24,6 +24,10 @@
 #include <sound/q6audio-v2.h>
 #include "msm-pcm-routing-v2.h"
 #include <sound/audio_cal_utils.h>
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2016/03/10, Add for add one critical log point
+#include <soc/oppo/mmkey_log.h>
+#endif /* VENDOR_EDIT */
 
 enum {
 	AFE_COMMON_RX_CAL = 0,
@@ -106,6 +110,14 @@ static struct afe_ctl this_afe;
 
 static int pcm_afe_instance[2];
 static int proxy_afe_instance[2];
+
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2016/03/10, Add for add one critical log point
+static int clk_open_timeout_count;
+static int clk_open_timeout_report_count;
+static unsigned long clk_open_timeout_report_delay;
+#endif /* VENDOR_EDIT */
+
 bool afe_close_done[2] = {true, true};
 
 #define SIZEOF_CFG_CMD(y) \
@@ -3691,6 +3703,10 @@ int afe_set_lpass_clock(u16 port_id, struct afe_clk_cfg *cfg)
 	struct afe_lpass_clk_config_command clk_cfg;
 	int index = 0;
 	int ret = 0;
+	#ifdef VENDOR_EDIT
+	//John.Xu@PhoneSw.AudioDriver, 2016/03/10, Add for add one critical log point
+	char *logmsg;
+	#endif /* VENDOR_EDIT */
 
 	if (!cfg) {
 		pr_err("%s: clock cfg is NULL\n", __func__);
@@ -3756,6 +3772,27 @@ int afe_set_lpass_clock(u16 port_id, struct afe_clk_cfg *cfg)
 	if (!ret) {
 		pr_err("%s: wait_event timeout\n", __func__);
 		ret = -EINVAL;
+        #ifdef VENDOR_EDIT
+        //John.Xu@PhoneSw.AudioDriver, 2016/03/09, Add for add one critical
+        //log point
+        clk_open_timeout_count++;
+        if( clk_open_timeout_count == 1){
+            clk_open_timeout_report_delay = jiffies + msecs_to_jiffies(10000);
+        }
+        //if the timeout count >5 in 10 seconds, then report the issue, and we
+        //only report 100 times if possible
+        if(clk_open_timeout_report_count < 201 && clk_open_timeout_count > 5 &&
+                !time_after(jiffies, clk_open_timeout_report_delay)) {
+            logmsg = (char *)kzalloc((strlen("afe_set_lpass_clock pror id: 0x")
+                    + 5), GFP_KERNEL);
+            sprintf(logmsg, "afe_set_lpass_clock pror id: 0x%x", port_id);
+            mm_keylog_write(logmsg, "wait_event timeout",
+                    TYPE_ADSP_CLK_OPEN_TIMEOUT);
+            clk_open_timeout_report_count++;
+            clk_open_timeout_count = 0;
+            kfree(logmsg);
+        }
+        #endif /* VENDOR_EDIT */
 		goto fail_cmd;
 	}
 	if (atomic_read(&this_afe.status) != 0) {

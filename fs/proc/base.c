@@ -2535,11 +2535,8 @@ static int do_io_accounting(struct task_struct *task, char *buffer, int whole)
 	if (result)
 		return result;
 
-	if (!ptrace_may_access(task, PTRACE_MODE_READ)) {
-		result = -EACCES;
-		goto out_unlock;
-	}
-
+	#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/10/09 add for resmon kernel module
+	#endif
 	if (whole && lock_task_sighand(task, &flags)) {
 		struct task_struct *t = task;
 
@@ -2564,7 +2561,8 @@ static int do_io_accounting(struct task_struct *task, char *buffer, int whole)
 			(unsigned long long)acct.read_bytes,
 			(unsigned long long)acct.write_bytes,
 			(unsigned long long)acct.cancelled_write_bytes);
-out_unlock:
+	#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/10/09 add for resmon kernel module
+	#endif
 	mutex_unlock(&task->signal->cred_guard_mutex);
 	return result;
 }
@@ -2761,7 +2759,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("coredump_filter", S_IRUGO|S_IWUSR, proc_coredump_filter_operations),
 #endif
 #ifdef CONFIG_TASK_IO_ACCOUNTING
-	INF("io",	S_IRUSR, proc_tgid_io_accounting),
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/09/29 add for IO stats
+	INF("io",	S_IRUSR | S_IRGRP | S_IROTH, proc_tgid_io_accounting),
+#endif
 #endif
 #ifdef CONFIG_HARDWALL
 	INF("hardwall",   S_IRUGO, proc_pid_hardwall),
@@ -3114,7 +3114,9 @@ static const struct pid_entry tid_base_stuff[] = {
 	REG("make-it-fail", S_IRUGO|S_IWUSR, proc_fault_inject_operations),
 #endif
 #ifdef CONFIG_TASK_IO_ACCOUNTING
-	INF("io",	S_IRUSR, proc_tid_io_accounting),
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/09/29 add for IO stats
+	INF("io",	S_IRUSR | S_IRGRP | S_IROTH, proc_tid_io_accounting),
+#endif
 #endif
 #ifdef CONFIG_HARDWALL
 	INF("hardwall",   S_IRUGO, proc_pid_hardwall),

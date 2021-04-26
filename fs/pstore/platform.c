@@ -267,6 +267,10 @@ int pstore_register(struct pstore_info *psi)
 	kmsg_dump_register(&pstore_dumper);
 	pstore_register_console();
 	pstore_register_ftrace();
+#ifdef VENDOR_EDIT
+//Geliang.Tang@Swdp.Android.OppoDebug.Pstore, 2015/12/14, add pmsg
+	pstore_register_pmsg();
+#endif /* VENDOR_EDIT */
 
 	if (pstore_update_ms >= 0) {
 		pstore_timer.expires = jiffies +

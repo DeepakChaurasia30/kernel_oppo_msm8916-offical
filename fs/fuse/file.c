@@ -17,7 +17,9 @@
 #include <linux/swap.h>
 #include <linux/aio.h>
 #include <linux/falloc.h>
-
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai 2015/09/29, add the iostat support for FUSE 2015/11/10 
+#include <linux/task_io_accounting_ops.h>
+#endif
 static const struct file_operations fuse_direct_io_file_operations;
 
 static int fuse_send_open(struct fuse_conn *fc, u64 nodeid, struct file *file,
@@ -615,7 +617,9 @@ static size_t fuse_send_read(struct fuse_req *req, struct fuse_io_priv *io,
 		inarg->read_flags |= FUSE_READ_LOCKOWNER;
 		inarg->lock_owner = fuse_lock_owner_id(fc, owner);
 	}
-
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai 2015/09/29, add the iostat support for FUSE 2015/11/10 
+	task_io_account_read(count);
+#endif
 	if (io->async)
 		return fuse_async_req_send(fc, req, count, io);
 
@@ -739,6 +743,9 @@ static void fuse_send_readpages(struct fuse_req *req, struct file *file)
 	loff_t pos = page_offset(req->pages[0]);
 	size_t count = req->num_pages << PAGE_CACHE_SHIFT;
 
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai 2015/09/29, add the iostat support for FUSE 2015/11/10 
+	task_io_account_read(count);
+#endif
 	req->out.argpages = 1;
 	req->out.page_zeroing = 1;
 	req->out.page_replace = 1;
@@ -1105,6 +1112,9 @@ static ssize_t fuse_perform_write(struct file *file,
 			if (!err) {
 				res += num_written;
 				pos += num_written;
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai 2015/09/29, add the iostat support for FUSE 2015/11/10 
+				task_io_account_write(num_written);
+#endif
 
 				/* break out of the loop on short write */
 				if (num_written != count)

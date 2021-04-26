@@ -22,6 +22,22 @@
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 
+#ifdef VENDOR_EDIT
+#if 0 //yh@Prd.BasicDrv, close QCM limit sdcard size feature, replace it with MTK solution
+//Xinhua.Song@BSP.Driver, 2015-04-02 Add for data and sdcard partition use different size
+#include "mount.h"
+#include <linux/statfs.h>
+#include <linux/mount.h>
+#include <linux/mmc/mmc.h>
+
+#define CHECK_1TH  (10 * 1024 * 1024)
+#define CHECK_2TH  (1 * 1024 * 1024)
+//TODO same with the macro in inode.c
+#define DATA_FREE_SIZE_TH (50 * 1024 * 1024)
+#endif
+#endif /* VENDOR_EDIT */
+
+
 typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*iov_fn_t)(struct kiocb *, const struct iovec *,
 		unsigned long, loff_t);
@@ -48,11 +64,26 @@ static loff_t lseek_execute(struct file *file, struct inode *inode,
 		return -EINVAL;
 	if (offset > maxsize)
 		return -EINVAL;
-
+	#ifndef VENDOR_EDIT 
+	//yixue.ge@bsp.drv modify for userdata readonly  maybe someone user  lseek race at readdir
 	if (offset != file->f_pos) {
 		file->f_pos = offset;
 		file->f_version = 0;
 	}
+	#else
+	if (offset != file->f_pos) {
+		if(S_ISDIR(inode->i_mode)){ //inode same as file->f_path.dentry->d_inode  file->inode  file->f_mapping->host;
+			mutex_lock(&inode->i_mutex);
+			file->f_pos = offset;
+			file->f_version = 0;
+			mutex_unlock(&inode->i_mutex);
+		}else
+		{
+			file->f_pos = offset;
+			file->f_version = 0;
+		}
+	}
+	#endif
 	return offset;
 }
 
@@ -451,6 +482,45 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 {
 	ssize_t ret;
 
+#ifdef VENDOR_EDIT
+#if 0 //yh@Prd.BasicDrv, close QCM limit sdcard size feature, replace it with MTK solution
+	//Xinhua.Song@BSP.Driver, 2015-04-02 Add for data and sdcard partition use different size
+	struct kstatfs stat;
+	struct mount *mount_data;
+	static long long store = 0;
+	mount_data = real_mount(file->f_path.mnt);
+	if (!memcmp(mount_data->mnt_mountpoint->d_name.name, "data", 5)) {
+		store -= count;	
+		if (store  <= CHECK_1TH) {		
+			vfs_statfs(&file->f_path, &stat);
+			store = stat.f_bfree * stat.f_bsize;
+			//printk(KERN_ERR "write data detect store: %llx\n", store);
+			if (store <= CHECK_2TH) {
+				//printk(KERN_ERR "no space store:%llx CHECK_2TH:%x\n", store, CHECK_2TH);
+				store += count;
+				return -ENOSPC;
+			}
+		}
+	}
+
+	if(!memcmp(file->f_path.mnt->mnt_sb->s_type->name, "fuse", 5)){	
+		store -= count;
+		if(store <= (DATA_FREE_SIZE_TH  + CHECK_1TH * 2)){		
+			vfs_statfs(&file->f_path, &stat);
+			store = stat.f_bfree * stat.f_bsize + DATA_FREE_SIZE_TH;
+			store -= count;
+			//printk(KERN_EMERG "initialize data free size when acess sdcard0 ,%llx\n",store);
+
+			if (store <= DATA_FREE_SIZE_TH) {
+				//printk(KERN_EMERG "wite sdcard0 over flow, %llx\n",store);
+				store += count;
+				return -ENOSPC;
+			}
+		}
+		store +=count;
+	}
+#endif
+#endif /* VENDOR_EDIT */
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
 	if (!file->f_op || (!file->f_op->write && !file->f_op->aio_write))
@@ -497,7 +567,12 @@ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_read(f.file, buf, count, &pos);
+		#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
 		file_pos_write(f.file, pos);
+		#else
+		if (ret >= 0)
+			file_pos_write(f.file, pos);
+		#endif
 		fdput(f);
 	}
 	return ret;
@@ -512,7 +587,12 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_write(f.file, buf, count, &pos);
+		#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
 		file_pos_write(f.file, pos);
+		#else
+		if (ret >= 0)
+			file_pos_write(f.file, pos);
+		#endif
 		fdput(f);
 	}
 
@@ -800,7 +880,12 @@ SYSCALL_DEFINE3(readv, unsigned long, fd, const struct iovec __user *, vec,
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_readv(f.file, vec, vlen, &pos);
+		#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
 		file_pos_write(f.file, pos);
+		#else
+		if (ret >= 0)
+			file_pos_write(f.file, pos);
+		#endif
 		fdput(f);
 	}
 
@@ -819,7 +904,12 @@ SYSCALL_DEFINE3(writev, unsigned long, fd, const struct iovec __user *, vec,
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_writev(f.file, vec, vlen, &pos);
+		#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
 		file_pos_write(f.file, pos);
+		#else
+		if (ret >= 0)
+			file_pos_write(f.file, pos);
+		#endif
 		fdput(f);
 	}
 
@@ -979,7 +1069,12 @@ COMPAT_SYSCALL_DEFINE3(readv, compat_ulong_t, fd,
 		return -EBADF;
 	pos = f.file->f_pos;
 	ret = compat_readv(f.file, vec, vlen, &pos);
-	f.file->f_pos = pos;
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
+		f.file->f_pos = pos;
+	#else
+		if (ret >= 0)
+			f.file->f_pos = pos;
+	#endif
 	fdput(f);
 	return ret;
 }
@@ -1045,7 +1140,12 @@ COMPAT_SYSCALL_DEFINE3(writev, compat_ulong_t, fd,
 		return -EBADF;
 	pos = f.file->f_pos;
 	ret = compat_writev(f.file, vec, vlen, &pos);
-	f.file->f_pos = pos;
+	#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for userdata readonly 
+		f.file->f_pos = pos;
+	#else
+		if (ret >= 0)
+			f.file->f_pos = pos;
+	#endif
 	fdput(f);
 	return ret;
 }

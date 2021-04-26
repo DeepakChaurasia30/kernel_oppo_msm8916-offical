@@ -45,6 +45,10 @@ static cputime64_t get_iowait_time(int cpu)
 
 static u64 get_idle_time(int cpu)
 {
+	#ifdef VENDOR_EDIT
+	// liangkun@Swdp.shanghai 2015/11/03 modify to get valid stat
+	return kcpustat_cpu(cpu).cpustat[CPUTIME_IDLE];
+	#else
 	u64 idle, idle_time = -1ULL;
 
 	if (cpu_online(cpu))
@@ -57,10 +61,15 @@ static u64 get_idle_time(int cpu)
 		idle = usecs_to_cputime64(idle_time);
 
 	return idle;
+	#endif
 }
 
 static u64 get_iowait_time(int cpu)
 {
+	#ifdef VENDOR_EDIT
+	// liangkun@Swdp.shanghai 2015/11/03 modify to get valid stat
+	return kcpustat_cpu(cpu).cpustat[CPUTIME_IOWAIT];
+	#else
 	u64 iowait, iowait_time = -1ULL;
 
 	if (cpu_online(cpu))
@@ -73,6 +82,7 @@ static u64 get_iowait_time(int cpu)
 		iowait = usecs_to_cputime64(iowait_time);
 
 	return iowait;
+	#endif
 }
 
 #endif

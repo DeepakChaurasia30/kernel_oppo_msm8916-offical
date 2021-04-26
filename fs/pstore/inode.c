@@ -247,6 +247,10 @@ static void parse_options(char *options)
 
 static int pstore_remount(struct super_block *sb, int *flags, char *data)
 {
+#ifdef VENDOR_EDIT
+//tanggeliang@Swdp.Android.Kernel, 2015/05/07, enable ramoops_console
+	sync_filesystem(sb);
+#endif /* VENDOR_EDIT */
 	parse_options(data);
 
 	return 0;
@@ -321,6 +325,12 @@ int pstore_mkfile(enum pstore_type_id type, char *psname, u64 id, int count,
 	case PSTORE_TYPE_FTRACE:
 		sprintf(name, "ftrace-%s", psname);
 		break;
+#ifdef VENDOR_EDIT
+//Geliang.Tang@Swdp.Android.OppoDebug.Pstore, 2015/12/14, add pmsg
+	case PSTORE_TYPE_PMSG:
+		sprintf(name, "pmsg-%s", psname);
+		break;
+#endif /* VENDOR_EDIT */
 	case PSTORE_TYPE_MCE:
 		sprintf(name, "mce-%s-%lld", psname, id);
 		break;

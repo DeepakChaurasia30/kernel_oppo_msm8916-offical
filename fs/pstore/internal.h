@@ -45,6 +45,15 @@ extern void pstore_register_ftrace(void);
 static inline void pstore_register_ftrace(void) {}
 #endif
 
+#ifdef VENDOR_EDIT
+//Geliang.Tang@Swdp.Android.OppoDebug.Pstore, 2015/12/14, add pmsg
+#ifdef CONFIG_PSTORE_PMSG
+extern void pstore_register_pmsg(void);
+#else
+static inline void pstore_register_pmsg(void) {}
+#endif
+#endif /* VENDOR_EDIT */
+
 extern struct pstore_info *psinfo;
 
 extern void	pstore_set_kmsg_bytes(int);

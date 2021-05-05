@@ -7,7 +7,7 @@ tcdir=${HOME}/android/TOOLS/GCC
 [ -d $tcdir ] && \
 echo "ARM64 TC Present." || \
 echo "ARM64 TC Not Present. Downloading..." | \
-git clone https://bitbucket.org/UBERTC/arm-linux-androideabi-4.9.git $tcdir/uber
+git clone https://bitbucket.org/UBERTC/aarch64-linux-android-4.9.git $tcdir/uber
 
 echo -e "\e[1;31m***********************************************"
 echo "          Compiling A37f Kernel          "

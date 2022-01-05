@@ -2564,8 +2564,7 @@ static int do_io_accounting(struct task_struct *task, char *buffer, int whole)
 			(unsigned long long)acct.read_bytes,
 			(unsigned long long)acct.write_bytes,
 			(unsigned long long)acct.cancelled_write_bytes);
-	#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/10/09 add for resmon kernel module
-	#endif
+out_unlock:
 	mutex_unlock(&task->signal->cred_guard_mutex);
 	return result;
 }
